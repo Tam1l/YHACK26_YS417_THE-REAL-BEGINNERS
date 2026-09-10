@@ -293,7 +293,7 @@ body {
 .arena-canvas-container {
     position: relative;
     width: 100%;
-    height: 520px;
+    height: 570px;
     background: var(--canvas-bg);
 }
 

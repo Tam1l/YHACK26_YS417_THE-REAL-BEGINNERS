@@ -12,13 +12,23 @@ let latestLatency = 17.8;
 let latestClusterData = null;
 
 // Telemetry packets in flight
+// Telemetry packets in flight
 let packets = [];
 
-// Fleet Robots
+// Failover visual state
+let failoverActive = false;
+let failoverStartTime = 0;
+
+// Closed-loop automated hazard state
+let hazardStage = 'IDLE'; // 'IDLE' | 'DETECTED' | 'CLOUD_DECISION' | 'CLEARING' | 'RESUMING'
+let hazardAutoTimer = null;
+
+// Fleet Robots with Dedicated Roles & Authentic Motion
 const agv = {
     id: 'AGV-01',
+    role: 'Heavy Pallet Transport',
     x: 100,
-    y: 265,
+    y: 294,
     targetX: 880,
     speed: 2.4,
     crit: 'CRITICAL',
@@ -29,18 +39,31 @@ const agv = {
 
 const drone = {
     id: 'DRONE-07',
-    x: 320,
-    y: 190,
-    angle: 0,
-    color: '#38bdf8'
+    role: 'High-Bay Inventory Scanner',
+    x: 140,
+    y: 205,
+    targetX: 180,
+    speed: 1.8,
+    tilt: 0,
+    hoverOffset: 0,
+    rotorAngle: 0,
+    currentBayIndex: 0,
+    bayHoverTimer: 0,
+    scannedSKU: 'SKU-8492 [99.8% VERIFIED]',
+    color: '#0284c7'
 };
 
 const sweeper = {
     id: 'SWEEPER-12',
-    x: 280,
-    y: 330,
-    dir: 1,
-    color: '#10b981'
+    role: 'Level 0 Aisle Floor Scrubber',
+    x: 120,
+    y: 374,
+    dirX: 1,
+    speed: 1.4,
+    brushAngle: 0,
+    trail: [],
+    sprayParticles: [],
+    color: '#059669'
 };
 
 // ================= THEME ENGINE =================
@@ -125,11 +148,11 @@ function drawWarehouse() {
     const h = canvas.height;
     const light = isLightTheme();
 
-    // Base background
+    // Base floor background
     ctx.fillStyle = light ? '#f8fafc' : '#0b1120';
     ctx.fillRect(0, 0, w, h);
 
-    // Floor Grid
+    // Architectural Precision Floor Grid
     ctx.strokeStyle = light ? '#e2e8f0' : '#17233f';
     ctx.lineWidth = 1;
     for (let x = 0; x < w; x += 40) {
@@ -139,35 +162,44 @@ function drawWarehouse() {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
     }
 
-    // Central AGV Highway Transit Lane
+    // High-Speed Transit Corridor (y: 250 to 338, height: 88, center y: 294)
     ctx.fillStyle = light ? '#f1f5f9' : '#131d33';
-    ctx.fillRect(0, 225, w, 80);
+    ctx.fillRect(0, 250, w, 88);
     ctx.strokeStyle = light ? '#cbd5e1' : '#25334d';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(0, 225); ctx.lineTo(w, 225);
-    ctx.moveTo(0, 305); ctx.lineTo(w, 305);
+    ctx.moveTo(0, 250); ctx.lineTo(w, 250);
+    ctx.moveTo(0, 338); ctx.lineTo(w, 338);
     ctx.stroke();
 
-    // Center yellow hazard guidestrip
+    // Center yellow safety guidestrip (centerline at y = 294)
     ctx.strokeStyle = '#d97706';
     ctx.lineWidth = 2.5;
     ctx.setLineDash([14, 12]);
     ctx.beginPath();
-    ctx.moveTo(0, 265); ctx.lineTo(w, 265);
+    ctx.moveTo(0, 294); ctx.lineTo(w, 294);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Highway Corridor Label
-    ctx.fillStyle = light ? '#64748b' : '#94a3b8';
-    ctx.font = 'bold 10px monospace';
-    ctx.fillText("AGV HIGH-SPEED TRANSIT CORRIDOR [LANE-01]", 260, 242);
+    // Distance tick markers along corridor
+    ctx.fillStyle = light ? '#94a3b8' : '#475569';
+    ctx.font = '8px monospace';
+    for (let dm = 0; dm <= 100; dm += 20) {
+        const dx = 40 + (dm / 100) * (w - 80);
+        ctx.fillRect(dx, 250, 1, 6);
+        ctx.fillRect(dx, 332, 1, 6);
+        ctx.fillText(`${dm}m`, dx - 6, 262);
+    }
 
-    // Fleet Autonomous Charging Dock (Top Center)
-    const dockX = Math.max(260, Math.floor((w - 180) / 2));
-    const dockY = 14;
-    const dockW = 180;
-    const dockH = 92;
+    // Highway Corridor Label
+    ctx.fillStyle = light ? '#475569' : '#94a3b8';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText("AGV HIGH-SPEED TRANSIT CORRIDOR [LANE-01: ISO 3691-4 PROTECTED]", 260, 274);
+
+    // Fleet Autonomous Fast-Dock (Top Center: x: (w-200)/2, y: 12, h: 74)
+    const dockW = 200, dockH = 74;
+    const dockX = Math.max(260, Math.floor((w - dockW) / 2));
+    const dockY = 12;
     ctx.fillStyle = light ? 'rgba(16, 185, 129, 0.08)' : 'rgba(16, 185, 129, 0.12)';
     ctx.fillRect(dockX, dockY, dockW, dockH);
     ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)';
@@ -175,41 +207,109 @@ function drawWarehouse() {
     ctx.strokeRect(dockX, dockY, dockW, dockH);
     ctx.fillStyle = '#10b981';
     ctx.font = 'bold 10px sans-serif';
-    ctx.fillText("⚡ AUTONOMOUS FAST-DOCK", dockX + 16, dockY + 22);
+    ctx.fillText("⚡ AUTONOMOUS FAST-DOCK (PAD-01)", dockX + 10, dockY + 20);
+    ctx.fillStyle = light ? '#475569' : '#94a3b8';
+    ctx.font = '9px monospace';
+    ctx.fillText("Dual 48V High-Rate Induction Pad", dockX + 10, dockY + 38);
+    // Charging contacts
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(dockX + 40, dockY + 46, 44, 14);
+    ctx.fillRect(dockX + 116, dockY + 46, 44, 14);
 
-    // Storage Racks
-    drawRack(30, 110, 190, 52, '#38bdf8', 'RACK-A [LOGISTICS]', light);
-    drawRack(w - 220, 110, 190, 52, '#818cf8', 'RACK-B [HIGH-BAY]', light);
-    drawRack(30, 370, 190, 52, '#34d399', 'RACK-C [INVENTORY]', light);
-    drawRack(w - 220, 370, 190, 52, '#f472b6', 'RACK-D [STAGING]', light);
+    // Upper High-Bay Racks: y = 128 to 188 (height: 60)
+    // Clearance from Top HUDs (y: 12..86) is 42px! Clearance to Highway (y: 250) is 62px!
+    drawRack(24, 128, 240, 60, '#38bdf8', 'RACK-A [HIGH-BAY LOGISTICS]', 'LEVEL 3: AERIAL DRONE SCAN LAYER', light);
+    drawRack(w - 264, 128, 240, 60, '#818cf8', 'RACK-B [HIGH-BAY AUTOMATED]', 'LEVEL 3: AERIAL DRONE SCAN LAYER', light);
 
-    // Floating HUD Panels
+    // Drone flight path indicator in the upper flight corridor
+    ctx.strokeStyle = light ? 'rgba(14, 165, 233, 0.25)' : 'rgba(14, 165, 233, 0.2)';
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.moveTo(30, 205); ctx.lineTo(w - 30, 205);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = light ? '#0284c7' : '#38bdf8';
+    ctx.font = '8.5px monospace';
+    ctx.fillText("✈️ AERIAL INSPECTION FLIGHT CORRIDOR (ALTITUDE: 4.8m)", 260, 218);
+
+    // Lower Floor Maintenance Apron: y = 338 to 414 (height: 76)
+    // Clearance between Highway and Lower Racks is 76px! Sweeper sweeps at y = 374!
+    ctx.strokeStyle = light ? 'rgba(5, 150, 105, 0.25)' : 'rgba(16, 185, 129, 0.2)';
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(30, 374); ctx.lineTo(w - 270, 374);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = light ? '#059669' : '#34d399';
+    ctx.font = '8.5px monospace';
+    ctx.fillText("🧹 AISLE 02 [LEVEL 0: FLOOR SANITIZATION & DUST SCRUBBING ZONE]", 24, 360);
+
+    // Lower Floor Racks: y = 414 to 474 (height: 60)
+    // Clearance below Highway is 76px; clearance below Racks is 96px!
+    drawRack(24, 414, 240, 60, '#34d399', 'RACK-C [INVENTORY & RAW]', 'LEVEL 0: SWEEPER AISLE PERIMETER', light);
+    drawRack(Math.max(290, Math.floor((w - 240) / 2)), 414, 240, 60, '#f472b6', 'RACK-D [STAGING & BUFFER]', 'LEVEL 0: SWEEPER AISLE PERIMETER', light);
+
+    // Floating HUD Panels with strict margin separation
     drawQueueHUD(light);
     drawCloudHubHUD(w, light);
     drawCameraHUD(w, light);
 }
 
-function drawRack(x, y, w, h, accentColor, label, light) {
+function drawRack(x, y, w, h, accentColor, label, tierLevel, light) {
+    // Rack Base Shelf
     ctx.fillStyle = light ? '#ffffff' : '#1e293b';
     ctx.fillRect(x, y, w, h);
     ctx.strokeStyle = light ? '#cbd5e1' : '#334155';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(x, y, w, h);
 
-    // Pallets
+    // Upright Structural Steel Columns with cross-lacing
+    ctx.fillStyle = light ? '#475569' : '#64748b';
+    ctx.fillRect(x, y, 6, h);
+    ctx.fillRect(x + w - 6, y, 6, h);
+    ctx.fillRect(x + Math.floor(w / 2) - 3, y, 6, h);
+
+    // Safety orange shelf load beams
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(x, y + 26, w, 3);
+    ctx.fillRect(x, y + h - 4, w, 3);
+
+    // 4 Pallet Cargo Units with Wooden Skids & Barcode tags
+    const bayW = 44;
     for (let i = 0; i < 4; i++) {
+        const px = x + 10 + i * 56;
+        // Pallet wooden base
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(px, y + 21, bayW, 5);
+
+        // Cargo box
         ctx.fillStyle = accentColor;
-        ctx.fillRect(x + 10 + i * 44, y + 10, 32, 22);
-        ctx.strokeStyle = light ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)';
-        ctx.strokeRect(x + 10 + i * 44, y + 10, 32, 22);
+        ctx.fillRect(px + 2, y + 5, bayW - 4, 16);
+        ctx.strokeStyle = light ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 2, y + 5, bayW - 4, 16);
+
+        // Barcode label on box
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(px + 6, y + 9, 14, 8);
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(px + 8, y + 10, 2, 6);
+        ctx.fillRect(px + 12, y + 10, 3, 6);
+        ctx.fillRect(px + 17, y + 10, 1, 6);
     }
-    ctx.fillStyle = light ? '#475569' : '#94a3b8';
-    ctx.font = '9px monospace';
-    ctx.fillText(label, x + 8, y + 44);
+
+    // Rack Tier Badge & Label
+    ctx.fillStyle = light ? '#0284c7' : '#38bdf8';
+    ctx.font = 'bold 8px monospace';
+    ctx.fillText(tierLevel, x + 8, y + 42);
+
+    ctx.fillStyle = light ? '#334155' : '#cbd5e1';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText(label, x + 8, y + 54);
 }
 
 function drawQueueHUD(light) {
-    const hudX = 16, hudY = 14, hudW = 220, hudH = 92;
+    const hudX = 24, hudY = 12, hudW = 220, hudH = 74;
     ctx.fillStyle = light ? '#ffffff' : '#0f172a';
     ctx.fillRect(hudX, hudY, hudW, hudH);
     ctx.strokeStyle = light ? '#cbd5e1' : '#1e293b';
@@ -219,7 +319,7 @@ function drawQueueHUD(light) {
     ctx.fillStyle = light ? '#4f46e5' : '#818cf8';
     ctx.font = 'bold 10px sans-serif';
     const qCount = latestClusterData?.autoscaler?.queue_depth ?? 0;
-    ctx.fillText(`⏳ RADS PRIORITY QUEUE (${qCount} WAITING)`, hudX + 10, hudY + 18);
+    ctx.fillText(`⏳ RADS PRIORITY QUEUE (${qCount} WAITING)`, hudX + 8, hudY + 16);
 
     const tasks = [
         { id: 'DRONE-07', crit: 'HIGH', color: '#0284c7' },
@@ -228,53 +328,69 @@ function drawQueueHUD(light) {
     ];
 
     tasks.forEach((t, i) => {
-        const itemY = hudY + 34 + i * 18;
+        const itemY = hudY + 26 + i * 14;
         ctx.fillStyle = t.color;
-        ctx.fillRect(hudX + 10, itemY, 6, 12);
+        ctx.fillRect(hudX + 8, itemY, 5, 9);
         ctx.fillStyle = light ? '#1e293b' : '#e2e8f0';
-        ctx.font = '10px monospace';
-        ctx.fillText(`P${i+1}: ${t.id} [${t.crit}]`, hudX + 22, itemY + 10);
+        ctx.font = '9px monospace';
+        ctx.fillText(`P${i+1}: ${t.id} [${t.crit}]`, hudX + 18, itemY + 8);
     });
 }
 
 function drawCloudHubHUD(w, light) {
-    const hubW = 220, hubH = 92;
-    const hubX = w - hubW - 16, hubY = 14;
+    const hubW = 220, hubH = 74;
+    const hubX = w - hubW - 24, hubY = 12;
 
     ctx.fillStyle = light ? '#ffffff' : '#0f172a';
     ctx.fillRect(hubX, hubY, hubW, hubH);
-    ctx.strokeStyle = light ? '#cbd5e1' : '#1e293b';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = failoverActive ? '#ef4444' : (light ? '#cbd5e1' : '#1e293b');
+    ctx.lineWidth = failoverActive ? 2 : 1.5;
     ctx.strokeRect(hubX, hubY, hubW, hubH);
 
-    ctx.fillStyle = light ? '#0284c7' : '#38bdf8';
+    ctx.fillStyle = failoverActive ? '#ef4444' : (light ? '#0284c7' : '#38bdf8');
     ctx.font = 'bold 10px sans-serif';
-    ctx.fillText("☁️ PRIVATE CLOUD HUB (8000)", hubX + 10, hubY + 18);
+    ctx.fillText(failoverActive ? "☁️ PRIVATE CLOUD (FAILOVER ACTIVE ⚠️)" : "☁️ PRIVATE CLOUD HUB (PORT 8000)", hubX + 8, hubY + 16);
 
-    // Worker 1
-    ctx.fillStyle = worker1Alive ? '#10b981' : '#ef4444';
-    ctx.beginPath(); ctx.arc(hubX + 16, hubY + 36, 4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = light ? '#1e293b' : '#cbd5e1';
-    ctx.font = '10px monospace';
-    ctx.fillText(`worker-1: ${worker1Alive ? 'HEALTHY' : 'FAILED'} [BASE]`, hubX + 28, hubY + 40);
+    // Worker 1 status row
+    const w1Alive = worker1Alive && !failoverActive;
+    ctx.fillStyle = w1Alive ? '#10b981' : '#ef4444';
+    ctx.beginPath(); ctx.arc(hubX + 14, hubY + 31, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = w1Alive ? (light ? '#1e293b' : '#cbd5e1') : '#dc2626';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText(w1Alive ? `worker-1: HEALTHY [BASE]` : `worker-1: 💀 CRASHED [TIMEOUT]`, hubX + 24, hubY + 34);
 
-    // Worker 2
-    ctx.fillStyle = worker2Alive ? '#10b981' : '#ef4444';
-    ctx.beginPath(); ctx.arc(hubX + 16, hubY + 54, 4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = light ? '#1e293b' : '#cbd5e1';
-    ctx.fillText(`worker-2: ${worker2Alive ? 'HEALTHY' : 'FAILED'} [BASE]`, hubX + 28, hubY + 58);
+    // Worker 2 status row
+    ctx.fillStyle = '#10b981';
+    ctx.beginPath(); ctx.arc(hubX + 14, hubY + 46, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = failoverActive ? '#d97706' : (light ? '#1e293b' : '#cbd5e1');
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText(failoverActive ? `worker-2: ⚡ RECOVERED [RADS P1]` : `worker-2: HEALTHY [BASE]`, hubX + 24, hubY + 49);
 
     // Autoscaler count
     const activePods = latestClusterData?.autoscaler?.current_workers ?? 2;
     ctx.fillStyle = activePods > 2 ? '#f59e0b' : '#10b981';
-    ctx.beginPath(); ctx.arc(hubX + 16, hubY + 72, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hubX + 14, hubY + 61, 4, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = light ? '#1e293b' : '#cbd5e1';
-    ctx.fillText(`worker-pool: ${activePods}/5 ACTIVE`, hubX + 28, hubY + 76);
+    ctx.font = '9px monospace';
+    ctx.fillText(`worker-pool: ${activePods}/5 ACTIVE`, hubX + 24, hubY + 64);
+
+    // Animated Failover Handover Arc inside HUD
+    if (failoverActive) {
+        ctx.save();
+        ctx.strokeStyle = '#d97706';
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(hubX + hubW - 30, hubY + 31);
+        ctx.quadraticCurveTo(hubX + hubW - 10, hubY + 39, hubX + hubW - 30, hubY + 46);
+        ctx.stroke();
+        ctx.restore();
+    }
 }
 
 function drawCameraHUD(w, light) {
-    const hudW = 210, hudH = 135;
-    const hudX = w - hudW - 16, hudY = canvas.height - hudH - 16;
+    const hudW = 220, hudH = 145;
+    const hudX = w - hudW - 24, hudY = 400;
     const isStopped = (agv.status === 'STOPPED');
 
     ctx.fillStyle = light ? '#ffffff' : '#0f172a';
@@ -289,33 +405,38 @@ function drawCameraHUD(w, light) {
 
     // Bounding box viewfinder
     ctx.fillStyle = light ? '#f1f5f9' : '#000000';
-    ctx.fillRect(hudX + 8, hudY + 26, hudW - 16, 78);
+    ctx.fillRect(hudX + 8, hudY + 26, hudW - 16, 84);
 
     ctx.strokeStyle = isStopped ? '#ef4444' : '#10b981';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(hudX + 35, hudY + 36, 120, 56);
+    ctx.strokeRect(hudX + 38, hudY + 36, 126, 62);
 
     ctx.fillStyle = isStopped ? '#ef4444' : '#10b981';
     ctx.font = 'bold 9px monospace';
-    ctx.fillText(isStopped ? 'TARGET: HUMAN (98%)' : 'TARGET: CLEAR (94%)', hudX + 40, hudY + 50);
+    ctx.fillText(isStopped ? 'TARGET: HUMAN (98.4%)' : 'TARGET: CLEAR (99.2%)', hudX + 42, hudY + 50);
 
     if (isStopped) {
         ctx.fillStyle = '#dc2626';
         ctx.font = 'bold 8.5px monospace';
-        ctx.fillText('STATUS: SAFETY STOPPED', hudX + 40, hudY + 66);
-        ctx.fillText('PROXIMITY: 85 cm [ZONE-1]', hudX + 40, hudY + 79);
+        ctx.fillText('STATUS: SAFETY STOPPED', hudX + 42, hudY + 68);
+        ctx.fillText('PROXIMITY: 85 cm [ZONE-1]', hudX + 42, hudY + 82);
+    } else {
+        ctx.fillStyle = '#059669';
+        ctx.font = '8px monospace';
+        ctx.fillText('LANE-01: OBSTACLE FREE', hudX + 42, hudY + 68);
+        ctx.fillText('AUTO-TRANSIT: 2.4 m/s', hudX + 42, hudY + 82);
     }
 
     ctx.fillStyle = isStopped ? '#dc2626' : (light ? '#64748b' : '#94a3b8');
-    ctx.font = isStopped ? 'bold 9px monospace' : '10px monospace';
-    ctx.fillText(isStopped ? "TELEMETRY: RED [URLLC SLICE]" : `LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`, hudX + 10, hudY + 122);
+    ctx.font = isStopped ? 'bold 9px monospace' : '9.5px monospace';
+    ctx.fillText(isStopped ? "TELEMETRY: RED [URLLC SLICE]" : `LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`, hudX + 10, hudY + 130);
 }
 
 // ================= SIMULATION PHYSICS & UPDATE =================
 function updateSimulation() {
     if (!isRunning) return;
 
-    // AGV Distance Safety Braking
+    // 1. AGV Transit & Braking Physics along Lane-01 (y = 294)
     if (humanHazard) {
         const distAhead = humanPos.x - agv.x;
         if (distAhead > 0 && distAhead < 130) {
@@ -338,31 +459,82 @@ function updateSimulation() {
         agv.x = 80;
     }
 
-    // Drone figure-eight motion
-    drone.angle += 0.035;
-    drone.x = 320 + Math.sin(drone.angle) * 110;
-    drone.y = 190 + Math.cos(drone.angle * 2) * 22;
+    // 2. Multirotor Drone Quadcopter Flight & Shelf Inspection
+    const w = canvas.width;
+    const inspectionBays = [65, 125, 185, 235, w - 235, w - 185, w - 125, w - 65];
+    const targetBayX = inspectionBays[drone.currentBayIndex % inspectionBays.length];
+    
+    // Smooth navigation towards target bay
+    const dx = targetBayX - drone.x;
+    if (Math.abs(dx) > 6) {
+        const moveDir = dx > 0 ? 1 : -1;
+        drone.x += moveDir * drone.speed;
+        drone.tilt = drone.tilt * 0.85 + (moveDir * 0.14) * 0.15; // Realistic banking tilt
+        drone.bayHoverTimer = 0;
+    } else {
+        // Drone hovers directly above rack bay to scan inventory
+        drone.tilt = drone.tilt * 0.8; // Level out
+        drone.bayHoverTimer++;
+        if (drone.bayHoverTimer > 85) { // Hover ~1.5s
+            drone.currentBayIndex = (drone.currentBayIndex + 1) % inspectionBays.length;
+            drone.scannedSKU = `SKU-${1000 + Math.floor(Math.random() * 8999)} [VERIFIED]`;
+            drone.bayHoverTimer = 0;
+        }
+    }
 
-    // Sweeper linear patrol
-    sweeper.x += sweeper.dir * 1.5;
-    if (sweeper.x > 460) sweeper.dir = -1;
-    if (sweeper.x < 240) sweeper.dir = 1;
+    drone.hoverOffset = Math.sin(Date.now() * 0.004) * 4;
+    drone.y = 205 + drone.hoverOffset;
+    drone.rotorAngle = (drone.rotorAngle + 0.45) % (Math.PI * 2);
 
-    // Periodic telemetry packets (more rapid when emergency brake is engaged)
-    const packetFreq = (agv.status === 'STOPPED') ? 0.18 : 0.08;
+    // 3. Sweeper Floor Perimeter Pathing & Brush Rotation along Level 0 (y = 374)
+    sweeper.x += sweeper.dirX * sweeper.speed;
+    if (sweeper.dirX > 0 && sweeper.x > canvas.width - 290) {
+        sweeper.dirX = -1;
+    } else if (sweeper.dirX < 0 && sweeper.x < 70) {
+        sweeper.dirX = 1;
+    }
+    sweeper.brushAngle = (sweeper.brushAngle + 0.22) % (Math.PI * 2);
+
+    // Record floor sanitization trail
+    if (Math.random() < 0.4) {
+        sweeper.trail.push({ x: sweeper.x, y: sweeper.y, opacity: 0.4 });
+    }
+    sweeper.trail.forEach(t => { t.opacity -= 0.007; });
+    sweeper.trail = sweeper.trail.filter(t => t.opacity > 0);
+
+    // Spray particles
+    if (Math.random() < 0.3) {
+        sweeper.sprayParticles.push({
+            x: sweeper.x - sweeper.dirX * 14,
+            y: sweeper.y + (Math.random() - 0.5) * 8,
+            life: 1.0
+        });
+    }
+    sweeper.sprayParticles.forEach(p => { p.life -= 0.04; });
+    sweeper.sprayParticles = sweeper.sprayParticles.filter(p => p.life > 0);
+
+    // 4. Smooth obstacle clearance animation
+    if (humanHazard && humanPos && humanPos.clearing) {
+        if (humanPos.y > 205) {
+            humanPos.y -= 1.8; // Steps out of corridor to safety walkway
+        }
+    }
+
+    // 5. Periodic 5G Telemetry Packets
+    const packetFreq = (agv.status === 'STOPPED') ? 0.24 : 0.08;
     if (Math.random() < packetFreq) {
-        const hubX = canvas.width - 120;
+        const hubX = canvas.width - 134;
         packets.push({
             fromX: agv.x,
             fromY: agv.y,
             toX: hubX,
-            toY: 60,
+            toY: 48,
             progress: 0,
             color: agv.status === 'STOPPED' ? '#ef4444' : '#38bdf8'
         });
     }
 
-    // Advance packets
+    // Advance telemetry packets
     packets.forEach(p => { p.progress += (agv.status === 'STOPPED' ? 0.05 : 0.04); });
     packets = packets.filter(p => p.progress < 1.0);
 }
@@ -372,8 +544,30 @@ function render() {
     const isStopped = (agv.status === 'STOPPED');
     drawWarehouse();
 
-    // Draw Human Hazard
-    if (humanHazard) {
+    // 1. Draw Sweeper Floor Sanitized Trail & Mist Spray
+    sweeper.trail.forEach(t => {
+        ctx.fillStyle = `rgba(16, 185, 129, ${t.opacity})`;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 16, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    sweeper.sprayParticles.forEach(p => {
+        ctx.fillStyle = `rgba(56, 189, 248, ${p.life * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // 2. Draw Multirotor Drone Quadcopter
+    drawDroneEntity(light);
+
+    // 3. Draw Sweeper Cleaning Robot
+    drawSweeperEntity(light);
+
+    // 4. Draw Human Hazard (if active)
+    if (humanHazard && humanPos) {
+        ctx.save();
         ctx.fillStyle = '#ef4444';
         ctx.beginPath(); ctx.arc(humanPos.x, humanPos.y - 14, 8, 0, Math.PI * 2); ctx.fill();
         ctx.fillRect(humanPos.x - 6, humanPos.y - 6, 12, 22);
@@ -381,16 +575,197 @@ function render() {
         ctx.strokeRect(humanPos.x - 14, humanPos.y - 26, 28, 48);
 
         ctx.fillStyle = '#dc2626';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillText("HAZARD", humanPos.x - 20, humanPos.y - 32);
+        ctx.font = 'bold 9.5px sans-serif';
+        ctx.fillText(humanPos.clearing ? "CLEARING..." : "HAZARD INTRUSION", humanPos.x - 30, humanPos.y - 32);
+        ctx.restore();
     }
 
+    // 5. Draw AGV Chassis & LiDAR Safety Field
+    drawAGVEntity(light, isStopped);
+
+    // 6. Draw 5G Telemetry Wireless Transmission Link
+    drawTelemetryUplink(light, isStopped);
+
+    // 7. Draw Live Closed-Loop Safety Incident Callout Card
+    if (isStopped) {
+        drawClosedLoopSafetyCallout(light);
+    }
+
+    // 8. Draw Live Zero-Loss Failover Callout Card
+    if (failoverActive) {
+        drawFailoverCallout(light);
+    }
+}
+
+function drawDroneEntity(light) {
+    ctx.save();
+    // Altitude Drop Shadow on the floor (scales with height)
+    ctx.fillStyle = light ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(drone.x, drone.y + 42, 22, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Downward Conical Optical/RFID Scan Beam over Rack
+    const grad = ctx.createLinearGradient(drone.x, drone.y + 6, drone.x, drone.y - 45);
+    grad.addColorStop(0, 'rgba(14, 165, 233, 0.45)');
+    grad.addColorStop(1, 'rgba(14, 165, 233, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(drone.x, drone.y + 4);
+    ctx.lineTo(drone.x - 32, drone.y - 45);
+    ctx.lineTo(drone.x + 32, drone.y - 45);
+    ctx.closePath();
+    ctx.fill();
+
+    // Barcode / RFID scan reticle over shelf crate
+    if (drone.bayHoverTimer > 10) {
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(drone.x - 18, drone.y - 50, 36, 18);
+        ctx.fillStyle = '#10b981';
+        ctx.font = 'bold 7.5px monospace';
+        ctx.fillText(drone.scannedSKU, drone.x - 42, drone.y - 54);
+    }
+
+    // Apply Quadcopter Banking Tilt Rotation
+    ctx.translate(drone.x, drone.y);
+    ctx.rotate(drone.tilt);
+
+    // Carbon-fiber X-Arms
+    ctx.strokeStyle = light ? '#334155' : '#94a3b8';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-16, -10); ctx.lineTo(16, 10);
+    ctx.moveTo(16, -10); ctx.lineTo(-16, 10);
+    ctx.stroke();
+
+    // 4 Motor Pods & High-Speed Spinning Rotor Blades
+    const motors = [
+        { x: -16, y: -10 },
+        { x: 16, y: -10 },
+        { x: -16, y: 10 },
+        { x: 16, y: 10 }
+    ];
+
+    motors.forEach((m, idx) => {
+        // Motor hub
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath(); ctx.arc(m.x, m.y, 3, 0, Math.PI * 2); ctx.fill();
+
+        // Spinning Rotor Blade Blur Disc
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(m.x, m.y, 12, 4.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // High-speed rotating blade spoke
+        ctx.strokeStyle = '#0284c7';
+        ctx.lineWidth = 1.2;
+        const angle = drone.rotorAngle + idx;
+        ctx.beginPath();
+        ctx.moveTo(m.x - Math.cos(angle) * 11, m.y - Math.sin(angle) * 3.5);
+        ctx.lineTo(m.x + Math.cos(angle) * 11, m.y + Math.sin(angle) * 3.5);
+        ctx.stroke();
+    });
+
+    // Central Aerodynamic Pod
+    ctx.fillStyle = '#0284c7';
+    ctx.beginPath();
+    ctx.roundRect(-10, -8, 20, 16, 4);
+    ctx.fill();
+    ctx.strokeStyle = '#0369a1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Blinking Navigational Strobe Beacon
+    ctx.fillStyle = (Date.now() % 400 < 200) ? '#38bdf8' : '#ffffff';
+    ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+
+    // Drone ID
+    ctx.fillStyle = light ? '#0369a1' : '#38bdf8';
+    ctx.font = 'bold 8px monospace';
+    ctx.fillText("DRONE-07", -20, -13);
+
+    ctx.restore();
+}
+
+function drawSweeperEntity(light) {
+    ctx.save();
+    // Dual Front Counter-Rotating Sweeping Brushes
+    const brushOffset = sweeper.dirX * 15;
+    const b1 = { x: sweeper.x + brushOffset, y: sweeper.y - 10 };
+    const b2 = { x: sweeper.x + brushOffset, y: sweeper.y + 10 };
+
+    [b1, b2].forEach((b, idx) => {
+        ctx.fillStyle = 'rgba(5, 150, 105, 0.3)';
+        ctx.beginPath(); ctx.arc(b.x, b.y, 9, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#047857';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        // Rotating bristle spokes
+        const bAngle = sweeper.brushAngle + idx * Math.PI;
+        for (let i = 0; i < 4; i++) {
+            const rad = bAngle + (i * Math.PI / 2);
+            ctx.beginPath();
+            ctx.moveTo(b.x, b.y);
+            ctx.lineTo(b.x + Math.cos(rad) * 8, b.y + Math.sin(rad) * 8);
+            ctx.stroke();
+        }
+    });
+
+    // Heavy-Duty Circular Body
+    ctx.fillStyle = '#059669';
+    ctx.beginPath(); ctx.arc(sweeper.x, sweeper.y, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#047857';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Protective Front Rubber Bumper
+    ctx.fillStyle = '#064e3b';
+    ctx.beginPath();
+    ctx.arc(sweeper.x, sweeper.y, 14, sweeper.dirX > 0 ? -Math.PI / 3 : Math.PI * 2 / 3, sweeper.dirX > 0 ? Math.PI / 3 : Math.PI * 4 / 3);
+    ctx.fill();
+
+    // Center pulsating amber hazard strobe
+    ctx.fillStyle = (Date.now() % 500 < 250) ? '#f59e0b' : '#d97706';
+    ctx.beginPath(); ctx.arc(sweeper.x, sweeper.y, 4.5, 0, Math.PI * 2); ctx.fill();
+
+    // Label
+    ctx.fillStyle = light ? '#047857' : '#34d399';
+    ctx.font = 'bold 8.5px monospace';
+    ctx.fillText("SWEEPER-12 [LEVEL 0 SANITIZER]", sweeper.x - 65, sweeper.y + 24);
+    ctx.restore();
+}
+
+function drawAGVEntity(light, isStopped) {
+    ctx.save();
+    // Headlights casting beam down lane
+    const hlGrad = ctx.createLinearGradient(agv.x + 22, agv.y, agv.x + 90, agv.y);
+    hlGrad.addColorStop(0, isStopped ? 'rgba(239, 68, 68, 0.4)' : 'rgba(254, 240, 138, 0.45)');
+    hlGrad.addColorStop(1, 'rgba(254, 240, 138, 0.0)');
+    ctx.fillStyle = hlGrad;
+    ctx.beginPath();
+    ctx.moveTo(agv.x + 22, agv.y - 8);
+    ctx.lineTo(agv.x + 90, agv.y - 25);
+    ctx.lineTo(agv.x + 90, agv.y + 25);
+    ctx.lineTo(agv.x + 22, agv.y + 8);
+    ctx.closePath();
+    ctx.fill();
+
     // AGV Chassis
-    ctx.fillStyle = agv.status === 'STOPPED' ? '#dc2626' : '#b91c1c';
+    ctx.fillStyle = isStopped ? '#dc2626' : '#b91c1c';
     ctx.fillRect(agv.x - 22, agv.y - 15, 44, 30);
     ctx.strokeStyle = '#991b1b';
     ctx.lineWidth = 2;
     ctx.strokeRect(agv.x - 22, agv.y - 15, 44, 30);
+
+    // Heavy cargo pallet on top
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(agv.x - 14, agv.y - 11, 28, 22);
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(agv.x - 14, agv.y - 11, 28, 22);
 
     // LiDAR Safety Beam Cone
     if (isStopped) {
@@ -402,7 +777,7 @@ function render() {
         ctx.closePath();
         ctx.fill();
 
-        // Pulsing danger warning arcs
+        // Pulsing warning arcs
         const pulseR = 30 + (Date.now() % 900) / 900 * 50;
         ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
         ctx.lineWidth = 2;
@@ -428,35 +803,16 @@ function render() {
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 9px sans-serif';
     ctx.fillText("AGV-01", agv.x - 18, agv.y + 3);
+    ctx.restore();
+}
 
-    // Drone
-    ctx.fillStyle = '#0284c7';
-    ctx.fillRect(drone.x - 12, drone.y - 12, 24, 24);
-    ctx.strokeStyle = '#0369a1';
-    ctx.strokeRect(drone.x - 12, drone.y - 12, 24, 24);
-
-    // Drone Spotlight
-    ctx.fillStyle = 'rgba(2, 132, 199, 0.18)';
-    ctx.beginPath();
-    ctx.moveTo(drone.x, drone.y + 12);
-    ctx.lineTo(drone.x - 24, drone.y + 36);
-    ctx.lineTo(drone.x + 24, drone.y + 36);
-    ctx.closePath();
-    ctx.fill();
-
-    // Sweeper
-    ctx.fillStyle = '#059669';
-    ctx.beginPath(); ctx.arc(sweeper.x, sweeper.y, 14, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#047857';
-    ctx.stroke();
-
-    // Telemetry Uplink Carrier Link & Packets
-    const hubX = canvas.width - 120;
-    const hubY = 60;
+function drawTelemetryUplink(light, isStopped) {
+    const hubX = canvas.width - 134;
+    const hubY = 48;
     
     ctx.save();
-    // Dashed wireless transmission line - bright red and prominent during emergency stop
-    ctx.strokeStyle = isStopped ? 'rgba(239, 68, 68, 0.85)' : 'rgba(56, 189, 248, 0.28)';
+    // Dashed wireless transmission line
+    ctx.strokeStyle = isStopped ? 'rgba(239, 68, 68, 0.85)' : 'rgba(56, 189, 248, 0.35)';
     ctx.setLineDash(isStopped ? [6, 4] : [4, 6]);
     ctx.lineWidth = isStopped ? 2.5 : 1.5;
     ctx.beginPath();
@@ -467,18 +823,18 @@ function render() {
     
     // Transmission carrier label
     const midX = (agv.x + hubX) / 2;
-    const midY = (agv.y + hubY) / 2 - 8;
+    const midY = (agv.y + hubY) / 2 - 10;
     if (isStopped) {
         ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText("🚨 5G Telemetry [EMERGENCY BRAKE ACTIVE - RED]", midX - 110, midY);
+        ctx.font = 'bold 10.5px sans-serif';
+        ctx.fillText("🚨 5G Telemetry Uplink [POST /api/v1/cloud/hazard {dist: 0.95m}]", midX - 145, midY);
     } else {
-        ctx.fillStyle = 'rgba(14, 165, 233, 0.85)';
+        ctx.fillStyle = 'rgba(14, 165, 233, 0.9)';
         ctx.font = '600 10px sans-serif';
-        ctx.fillText("📡 5G Telemetry Uplink (4ms)", midX - 60, midY);
+        ctx.fillText("📡 5G Telemetry Uplink (Normal 4ms)", midX - 70, midY);
     }
 
-    // Dynamic data packets - glowing red during emergency stop
+    // Dynamic data packets
     packets.forEach(p => {
         const curX = p.fromX + (p.toX - p.fromX) * p.progress;
         const curY = p.fromY + (p.toY - p.fromY) * p.progress;
@@ -489,64 +845,108 @@ function render() {
         ctx.shadowBlur = 0;
     });
     ctx.restore();
+}
 
-    // If emergency stopped, render rich Live Telemetry Callout directly on the floor
-    if (isStopped) {
-        const boxW = 275;
-        const boxH = 98;
-        let boxX = agv.x - 30;
-        if (boxX + boxW > canvas.width - 20) boxX = canvas.width - boxW - 20;
-        if (boxX < 15) boxX = 15;
-        const boxY = Math.max(16, agv.y - 128);
+function drawClosedLoopSafetyCallout(light) {
+    const boxW = 310;
+    const boxH = 112;
+    let boxX = agv.x - 30;
+    if (boxX + boxW > canvas.width - 20) boxX = canvas.width - boxW - 20;
+    if (boxX < 15) boxX = 15;
+    const boxY = Math.max(16, agv.y - 138);
 
-        ctx.save();
-        // Dashed leader pointer to AGV
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath();
-        ctx.moveTo(agv.x, agv.y - 16);
-        ctx.lineTo(boxX + 35, boxY + boxH);
-        ctx.stroke();
-        ctx.setLineDash([]);
+    ctx.save();
+    // Dashed leader pointer to AGV
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(agv.x, agv.y - 16);
+    ctx.lineTo(boxX + 40, boxY + boxH);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
-        // Card body shadow & fill
-        ctx.shadowColor = 'rgba(239, 68, 68, 0.4)';
-        ctx.shadowBlur = 12;
-        ctx.fillStyle = light ? '#ffffff' : '#0f172a';
-        ctx.fillRect(boxX, boxY, boxW, boxH);
-        ctx.shadowBlur = 0;
+    // Card body shadow & fill
+    ctx.shadowColor = 'rgba(239, 68, 68, 0.4)';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = light ? '#ffffff' : '#0f172a';
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.shadowBlur = 0;
 
-        // Border
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(boxX, boxY, boxW, boxH);
+    // Border
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-        // Crimson Header Bar
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(boxX, boxY, boxW, 23);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10.5px sans-serif';
-        ctx.fillText("🚨 5G TELEMETRY [EMERGENCY HALT]", boxX + 10, boxY + 16);
+    // Crimson Header Bar
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(boxX, boxY, boxW, 23);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText("🚨 CLOSED-LOOP CLOUD SAFETY INCIDENT (ISO 3691-4)", boxX + 8, boxY + 16);
 
-        // Telemetry Details
-        ctx.fillStyle = light ? '#0f172a' : '#f8fafc';
-        ctx.font = 'bold 9.5px monospace';
-        ctx.fillText("• STATUS    : EMERGENCY BRAKE ACTIVE (RED)", boxX + 10, boxY + 39);
+    // 6-Point Closed Loop Trace
+    ctx.fillStyle = light ? '#0f172a' : '#f8fafc';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText("1. SENSOR   : Front LiDAR detected obstacle at 95cm", boxX + 8, boxY + 38);
+    ctx.fillText("2. 5G UPLINK: Perception frame to Cloud Hub (4.1ms)", boxX + 8, boxY + 51);
 
-        ctx.fillStyle = '#dc2626';
-        ctx.fillText("• PROXIMITY : 85 cm [HUMAN IN PATH]", boxX + 10, boxY + 53);
+    ctx.fillStyle = '#dc2626';
+    ctx.fillText("3. CLOUD AI : YOLOv8 detected PERSON (conf 98.4%)", boxX + 8, boxY + 64);
+    ctx.fillText("4. COMMAND  : 'EMERGENCY_BRAKE' sent to AGV", boxX + 8, boxY + 77);
 
-        ctx.fillStyle = light ? '#334155' : '#cbd5e1';
-        ctx.font = '9.5px monospace';
-        ctx.fillText("• VELOCITY  : 0.00 m/s (Braking dist: 12.4cm)", boxX + 10, boxY + 67);
+    ctx.fillStyle = light ? '#334155' : '#cbd5e1';
+    ctx.fillText("5. AGV ACT  : Brakes locked -> Stopped in 12.4cm", boxX + 8, boxY + 90);
 
-        ctx.fillStyle = '#0284c7';
-        ctx.font = 'bold 9.5px monospace';
-        ctx.fillText("• BLACK-BOX : S3 ISO 3691-4 Record Sealed", boxX + 10, boxY + 83);
+    ctx.fillStyle = '#0284c7';
+    const statusTxt = (hazardStage === 'CLEARING') ? '6. RECOVERY : Worker stepping clear -> Auto-Resume' : '6. BLACK-BOX: S3 WORM Incident Record Sealed';
+    ctx.fillText(statusTxt, boxX + 8, boxY + 104);
 
-        ctx.restore();
-    }
+    ctx.restore();
+}
+
+function drawFailoverCallout(light) {
+    const boxW = 310;
+    const boxH = 106;
+    const boxX = canvas.width - boxW - 240;
+    const boxY = 96;
+
+    ctx.save();
+    // Card body shadow & fill
+    ctx.shadowColor = 'rgba(217, 119, 6, 0.4)';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = light ? '#ffffff' : '#0f172a';
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.shadowBlur = 0;
+
+    // Amber/Orange border
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    // Header Bar
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(boxX, boxY, boxW, 23);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.fillText("🔥 ZERO-LOSS WORKER FAILOVER (SUPERVISOR ACTIVE)", boxX + 8, boxY + 16);
+
+    // Failover details
+    ctx.fillStyle = '#dc2626';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillText("• WORKER-1    : CRASHED (Heartbeat missed > 3000ms)", boxX + 8, boxY + 38);
+
+    ctx.fillStyle = light ? '#0f172a' : '#f8fafc';
+    ctx.fillText("• RESCUED JOB : AGV Perception [Priority 1 - CRITICAL]", boxX + 8, boxY + 52);
+
+    ctx.fillStyle = '#059669';
+    ctx.fillText("• RADS SCORE  : 1.00 Preserved (Zero Starvation)", boxX + 8, boxY + 66);
+    ctx.fillText("• RE-DISPATCH : Handed over to Worker-2 [HEALTHY]", boxX + 8, boxY + 80);
+
+    ctx.fillStyle = '#0284c7';
+    ctx.fillText("• DOWNTIME    : 0.00s | Fault Tolerant SLA Maintained", boxX + 8, boxY + 95);
+
+    ctx.restore();
 }
 
 function gameLoop() {
@@ -1345,21 +1745,28 @@ document.getElementById('btnPlayPause').addEventListener('click', (e) => {
     showToast(isRunning ? "Fleet Simulation Resumed" : "Fleet Simulation Paused", "info");
 });
 
-// 2. Hazard Toggle (Paces visual stop first, then glides to Tab 4 logs)
-document.getElementById('btnHazard').addEventListener('click', async () => {
-    humanHazard = !humanHazard;
-    const btn = document.getElementById('btnHazard');
-    if (humanHazard) {
-        humanPos = { x: agv.x + 85, y: 265 };
-        agv.status = 'STOPPED';
-        agv.speed = 0;
-        btn.innerHTML = '🟢 <span>CLEAR HAZARD</span> <span class="btn-tab-tag">Tab 4</span>';
-        
-        // 1. Immediately halt on floor, turn 5G telemetry line & packets RED, and display live details callout
-        showBanner("🚨 SAFETY CRITICAL: HUMAN OBSTACLE DETECTED! 5G TELEMETRY SWITCHED TO RED", "rgba(220, 38, 38, 0.95)", "#ef4444");
-        showToast("🚨 Obstacle detected at 85cm! AGV halted, 5G telemetry turned RED. Viewing floor telemetry details... gliding to S3 audit logs in 3s.", "error", 4500);
+// 2. Automated Closed-Loop Hazard Lifecycle Demo
+async function triggerAutomatedHazardCycle() {
+    if (hazardStage !== 'IDLE') return;
 
-        // 2. Immediately seal authentic ISO 3691-4 Black-Box incident in backend S3/Redis
+    hazardStage = 'DETECTED';
+    humanHazard = true;
+    humanPos = { x: agv.x + 105, y: 294, clearing: false };
+    agv.status = 'STOPPED';
+    agv.speed = 0;
+    
+    const btn = document.getElementById('btnHazard');
+    if (btn) btn.innerHTML = '⚠️ <span>SAFETY CYCLE RUNNING...</span> <span class="btn-tab-tag">Tab 4</span>';
+
+    // Step 1: LiDAR detects obstacle -> 5G Telemetry turns RED
+    showBanner("🚨 SENSOR TRIGGER: AGV FRONT LIDAR DETECTS OBSTACLE AT 95cm -> 5G TELEMETRY STREAMING TO CLOUD", "rgba(220, 38, 38, 0.95)", "#ef4444");
+    showToast("🚨 Obstacle detected at 95cm! AGV safety stopped, 5G telemetry switched to RED. Streaming perception frame to Cloud Hub...", "error", 4000);
+
+    // Step 2 (800ms): Cloud processes frame with YOLOv8 and returns EMERGENCY_BRAKE command
+    setTimeout(async () => {
+        if (hazardStage !== 'DETECTED') return;
+        hazardStage = 'CLOUD_DECISION';
+        
         let sealedIncident = null;
         try {
             const hRes = await fetch('/api/v1/cloud/hazard', { method: 'POST' });
@@ -1375,27 +1782,42 @@ document.getElementById('btnHazard').addEventListener('click', async () => {
             console.warn("Hazard archive call error:", err);
         }
 
-        // 3. Keep viewport at the top for 3.0s so viewer clearly sees the AGV stopping,
-        // the red 5G telemetry line and packets, and reads the on-floor Telemetry Callout box!
-        navigateToTab('tabIncidents', '#incidentsTableBody', true, 3000, () => {
-            const incId = sealedIncident?.incident_id || (latestIncidentsCache[0]?.incident_id);
-            if (incId) {
-                inspectIncident(incId);
-            }
-            showToast("🛡️ ISO 3691-4 Black-Box sealed into S3: Showing flight recorder audit trace.", "info", 4500);
-        });
-    } else {
-        if (navigationTimer) {
-            clearTimeout(navigationTimer);
-            navigationTimer = null;
-        }
-        agv.status = 'NORMAL';
-        agv.speed = 2.4;
-        btn.innerHTML = '🚨 <span>TRIGGER HAZARD (AGV-01)</span> <span class="btn-tab-tag">Tab 4</span>';
-        showBanner("✅ PATH CLEAR: AGV RESUMING AUTONOMOUS TRANSIT", "rgba(16, 185, 129, 0.95)", "#10b981");
-        showToast("Hazard cleared. AGV resuming normal speed. Telemetry restored to normal.", "success");
-    }
-});
+        showBanner("☁️ CLOUD DECISION: YOLOv8 CONFIRMED 'PERSON' (98.4%) IN 16.2ms -> DISPATCHED 'EMERGENCY_BRAKE' -> S3 AUDIT SEALED", "rgba(220, 38, 38, 0.95)", "#ef4444");
+        showToast("☁️ Cloud AI Decision: Person identified (conf 98.4%). Safety stop command locked at 12.4cm. ISO 3691-4 incident sealed in S3.", "security", 4000);
+
+        // Step 3 (3600ms): Obstacle begins stepping clear of the transit corridor
+        setTimeout(() => {
+            if (hazardStage !== 'CLOUD_DECISION') return;
+            hazardStage = 'CLEARING';
+            humanPos.clearing = true;
+            showBanner("⚠️ CLEARANCE IN PROGRESS: WORKER STEPPING OUT OF TRANSIT CORRIDOR...", "rgba(245, 158, 11, 0.95)", "#f59e0b");
+
+            // Step 4 (5200ms): Corridor restored -> Cloud resets safety protocol -> AGV resumes
+            setTimeout(() => {
+                hazardStage = 'RESUMING';
+                humanHazard = false;
+                agv.status = 'NORMAL';
+                agv.speed = 2.4;
+                
+                if (btn) btn.innerHTML = '🚨 <span>Emergency Hazard (AGV-01)</span> <span class="btn-tab-tag">Tab 4</span>';
+                
+                showBanner("✅ CORRIDOR RESTORED: SENSORS REPORT CLEAR (99.8%) -> CLOUD RESUMES AUTONOMOUS TRANSIT!", "rgba(16, 185, 129, 0.95)", "#10b981");
+                showToast("✅ Corridor cleared! AGV autonomously accelerates back to normal transit. 5G telemetry restored to normal.", "success", 4500);
+
+                // Step 5 (6600ms): Smoothly glide down to Tab 4 to inspect the sealed S3 Black-Box incident
+                navigateToTab('tabIncidents', '#incidentsTableBody', true, 1600, () => {
+                    const incId = sealedIncident?.incident_id || (latestIncidentsCache[0]?.incident_id);
+                    if (incId) {
+                        inspectIncident(incId);
+                    }
+                    hazardStage = 'IDLE';
+                });
+            }, 1500);
+        }, 3000);
+    }, 800);
+}
+
+document.getElementById('btnHazard').addEventListener('click', triggerAutomatedHazardCycle);
 
 // 3. Batch Leapfrog (Paced preemption demo)
 document.getElementById('btnBatchDemo').addEventListener('click', async () => {
@@ -1413,18 +1835,22 @@ document.getElementById('btnBatchDemo').addEventListener('click', async () => {
     }
 });
 
-// 4. Kill Worker-1 / Restore Worker-1 (Paced failover demo)
+// 4. Kill Worker-1 / Restore Worker-1 (Visible Zero-Loss Failover Handover)
 document.getElementById('btnKillWorker').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     if (worker1Alive) {
         try {
             await fetch('/api/v1/debug/workers/worker-1/fail', { method: 'POST' });
             worker1Alive = false;
-            btn.innerHTML = '⚡ <span>RESTORE WORKER-1</span> <span class="btn-tab-tag">Tab 1</span>';
+            failoverActive = true;
+            failoverStartTime = Date.now();
+            btn.innerHTML = '⚡ <span>Restore Worker-1</span> <span class="btn-tab-tag">Tab 1</span>';
             btn.className = 'btn btn-emerald';
-            showBanner("🔥 WORKER-1 CRASHED! ATOMIC FAILOVER REQUEUE ENGAGED.", "rgba(245, 158, 11, 0.95)", "#f59e0b");
-            showToast("Worker-1 killed! Moving to Tab 1 (Worker Fabric) to observe instant peer failover...", "warning", 5000);
-            navigateToTab('tabFabric', '#workersListContainer', true, 1400);
+
+            showBanner("🔥 FAILOVER TRIGGERED: WORKER-1 CRASHED! SUPERVISOR RESCUES IN-FLIGHT TASK & REDISPATCHES TO WORKER-2 (ZERO PRIORITY LOSS)", "rgba(245, 158, 11, 0.95)", "#d97706");
+            showToast("🔥 Worker-1 killed! Supervisor detected heartbeat failure (>3000ms). Rescuing in-flight AGV task -> re-dispatching to Worker-2 with original RADS priority preserved!", "warning", 5000);
+
+            navigateToTab('tabFabric', '#workersListContainer', true, 2600);
         } catch (err) {
             showToast(`Fail error: ${err}`, "error");
         }
@@ -1432,9 +1858,11 @@ document.getElementById('btnKillWorker').addEventListener('click', async (e) => 
         try {
             await fetch('/api/v1/debug/workers/worker-1/recover', { method: 'POST' });
             worker1Alive = true;
-            btn.innerHTML = '🔥 <span>KILL WORKER-1</span> <span class="btn-tab-tag">Tab 1</span>';
+            failoverActive = false;
+            btn.innerHTML = '🔥 <span>Kill Worker-1</span> <span class="btn-tab-tag">Tab 1</span>';
             btn.className = 'btn btn-warning';
-            showBanner("⚡ WORKER-1 RESTORED & RE-JOINED COMPUTE CLUSTER.", "rgba(16, 185, 129, 0.95)", "#10b981");
+
+            showBanner("⚡ WORKER-1 RESTORED & RE-JOINED COMPUTE CLUSTER FABRIC!", "rgba(16, 185, 129, 0.95)", "#10b981");
             showToast("Worker-1 restored to cluster pool! Centered on Tab 1 (Worker Fabric).", "success");
             navigateToTab('tabFabric', '#workersListContainer', true, 1000);
         } catch (err) {
