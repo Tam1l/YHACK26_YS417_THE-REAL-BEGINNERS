@@ -23,7 +23,13 @@ JWT_SECRET = os.getenv("JWT_SECRET", "supersecret")
 JWT_ALGORITHM = "HS256"
 
 raw_tokens = os.getenv("ROBOT_TOKENS", "robot-token-secret,agv-token,drone-token")
-PRE_SHARED_TOKENS = set(filter(None, [t.strip() for t in raw_tokens.split(",")]))
+ROBOT_POLICIES = {
+    "robot-token-secret": {"robot_id": "AGV-01", "max_priority": 1},
+    "agv-token": {"robot_id": "AGV-01", "max_priority": 1},
+    "drone-token": {"robot_id": "DRONE-07", "max_priority": 2},
+    "sweeper-token": {"robot_id": "SWEEPER-12", "max_priority": 5},
+}
+PRE_SHARED_TOKENS = set(filter(None, [t.strip() for t in raw_tokens.split(",")])) | set(ROBOT_POLICIES)
 
 redis_client = redis.StrictRedis(
     host=REDIS_HOST,
@@ -31,7 +37,6 @@ redis_client = redis.StrictRedis(
     db=REDIS_DB,
     password=REDIS_PASSWORD,
     decode_responses=True,
-    protocol=2,
     protocol=2,
 )
 
@@ -50,8 +55,8 @@ def verify_token(
         else:
             return {"token": token}
 
-    if x_robot_token and (x_robot_token in PRE_SHARED_TOKENS or not PRE_SHARED_TOKENS):
-        return {"robot_token": x_robot_token}
+    if x_robot_token and x_robot_token in PRE_SHARED_TOKENS:
+        return ROBOT_POLICIES.get(x_robot_token, {"robot_token": x_robot_token, "max_priority": 9})
 
     # Development fallback
     if not authorization and not x_robot_token:
@@ -84,6 +89,10 @@ def root():
 @app.post("/predict", status_code=status.HTTP_201_CREATED)
 def predict(request: PredictRequest, auth=Depends(verify_token)):
     try:
+        if "max_priority" in auth and request.priority < auth["max_priority"]:
+            raise HTTPException(status_code=403, detail="Requested priority exceeds robot policy")
+        if auth.get("robot_id") and request.robot_id != auth["robot_id"]:
+            raise HTTPException(status_code=403, detail="Robot ID does not match authenticated token")
         task_id = str(uuid.uuid4())
         task_key = f"task:{task_id}"
         now = time.time()
@@ -109,6 +118,8 @@ def predict(request: PredictRequest, auth=Depends(verify_token)):
             "state": "queued",
             "submitted_at": now
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Queue Error: {str(e)}")
 

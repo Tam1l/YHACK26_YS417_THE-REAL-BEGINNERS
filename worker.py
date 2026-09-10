@@ -22,7 +22,6 @@ redis_client = redis.StrictRedis(
     password=REDIS_PASSWORD,
     decode_responses=True,
     protocol=2,
-    protocol=2,
 )
 
 # Attempt to load Ultralytics YOLOv8
