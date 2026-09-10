@@ -8,6 +8,8 @@ from typing import Optional, Literal, Dict
 import redis
 from fastapi import FastAPI, HTTPException, Header, Depends, status, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 from rads import deadline_risk, rads_score
 
@@ -124,6 +126,9 @@ app.add_middleware(
 )
 
 @app.get("/")
+def root():
+    return RedirectResponse(url="/dashboard/")
+
 @app.get("/health")
 def health():
     try:
@@ -471,3 +476,7 @@ def recover_worker(worker_id: str):
         "current_job_id": ""
     })
     return {"status": "recovered", "worker_id": worker_id}
+
+if os.path.isdir("web"):
+    app.mount("/dashboard", StaticFiles(directory="web", html=True), name="dashboard")
+
