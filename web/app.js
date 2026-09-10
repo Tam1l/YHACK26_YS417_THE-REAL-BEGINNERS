@@ -368,6 +368,8 @@ function updateSimulation() {
 }
 
 function render() {
+    const light = isLightTheme();
+    const isStopped = (agv.status === 'STOPPED');
     drawWarehouse();
 
     // Draw Human Hazard
@@ -548,8 +550,12 @@ function render() {
 }
 
 function gameLoop() {
-    updateSimulation();
-    render();
+    try {
+        updateSimulation();
+        render();
+    } catch (err) {
+        console.error("Simulation loop error:", err);
+    }
     requestAnimationFrame(gameLoop);
 }
 
@@ -569,9 +575,18 @@ async function pollTelemetry() {
 
         if (healthRes && healthRes.ok) {
             const h = await healthRes.json();
-            document.getElementById('txtGatewayStatus').innerText = h.status.toUpperCase();
-            document.getElementById('txtWorkerCount').innerText = `${h.workers_healthy}/5 ONLINE`;
-            document.getElementById('txtAutoscalerState').innerText = h.autoscaler_state;
+            if (h && h.status) {
+                const el = document.getElementById('txtGatewayStatus');
+                if (el) el.innerText = h.status.toUpperCase();
+            }
+            if (h && h.workers_healthy !== undefined) {
+                const el = document.getElementById('txtWorkerCount');
+                if (el) el.innerText = `${h.workers_healthy}/5 ONLINE`;
+            }
+            if (h && h.autoscaler_state) {
+                const el = document.getElementById('txtAutoscalerState');
+                if (el) el.innerText = h.autoscaler_state;
+            }
         }
 
         if (statusRes && statusRes.ok) {
