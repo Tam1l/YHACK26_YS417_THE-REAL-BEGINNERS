@@ -94,7 +94,7 @@ for tid in task_ids:
 
 if rows:
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)
 else:
     st.info("No active tasks processed yet. Launch robot_simulator.py to generate live robot workloads.")
 
