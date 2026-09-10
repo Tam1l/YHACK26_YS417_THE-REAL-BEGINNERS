@@ -147,8 +147,23 @@ c_dl = st.sidebar.slider("Deadline (ms):", min_value=50, max_value=2000, value=i
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Live YOLO Camera")
-st.sidebar.caption("Capture a real webcam frame or upload a photo. The frame is queued through RADS for YOLO detection.")
-camera_frame = st.sidebar.camera_input("Capture robot camera frame", key="live_camera_frame")
+if "camera_enabled" not in st.session_state:
+    st.session_state["camera_enabled"] = False
+
+camera_button_label = "📷 Open Robot Camera" if not st.session_state["camera_enabled"] else "📷 Close Robot Camera"
+if st.sidebar.button(camera_button_label, width="stretch"):
+    st.session_state["camera_enabled"] = not st.session_state["camera_enabled"]
+    if not st.session_state["camera_enabled"]:
+        st.session_state.pop("live_camera_frame", None)
+    st.rerun()
+
+st.sidebar.caption("The webcam only activates after opening it. Uploaded photos are also queued through RADS for YOLO detection.")
+camera_frame = None
+if st.session_state["camera_enabled"]:
+    camera_frame = st.sidebar.camera_input("Capture robot camera frame", key="live_camera_frame")
+else:
+    st.sidebar.info("Camera is off. Click Open Robot Camera when you need a new frame.")
+
 uploaded_frame = st.sidebar.file_uploader("Or upload a JPEG/PNG", type=["jpg", "jpeg", "png"], key="live_upload_frame")
 live_frame = camera_frame if camera_frame is not None else uploaded_frame
 auto_run_live_yolo = st.sidebar.checkbox("Automatically process each new photo", value=True)
@@ -165,7 +180,6 @@ if live_frame is not None and auto_run_live_yolo:
 elif live_frame is None:
     # Clearing a frame permits a future capture of the same scene to be processed again.
     st.session_state.pop("last_live_frame_hash", None)
-    st.session_state.pop("live_vision_task_id", None)
 
 if st.sidebar.button("Run Real YOLO Inference", width="stretch"):
     if live_frame is None:
