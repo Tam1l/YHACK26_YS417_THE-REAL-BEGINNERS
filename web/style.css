@@ -1034,10 +1034,10 @@ body {
 .panel-status { font-size: 11px; font-weight: 600; color: var(--color-blue); background: var(--bg-input); padding: 8px; border-radius: 6px; }
 .panel-link { background: transparent; border: 0; border-radius: 6px; color: var(--text-secondary); padding: 7px 8px; text-align: left; font-size: 12px; cursor: pointer; }
 .panel-link:hover { background: var(--bg-card-hover); color: var(--text-primary); }
-.camera-preview { overflow: hidden; border: 1px solid var(--border-card); border-radius: 8px; background: #020617; }
+.camera-preview { flex: 0 0 auto; overflow: hidden; border: 1px solid var(--border-card); border-radius: 8px; background: #020617; }
 .camera-preview[hidden] { display: none !important; }
 .camera-preview.is-open { display: block !important; }
-.camera-shutter { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; padding: 0; border: 0; cursor: crosshair; background: #020617; }
+.camera-shutter { position: relative; display: block; width: 100%; height: 180px; min-height: 180px; padding: 0; border: 0; cursor: crosshair; background: #020617; }
 .camera-preview video { display: block; width: 100%; height: 100%; object-fit: cover; }
 .camera-shutter span { position: absolute; right: 7px; bottom: 7px; color: #fff; background: rgba(15, 23, 42, .78); border: 1px solid rgba(255,255,255,.3); border-radius: 4px; padding: 3px 6px; font-size: 10px; font-weight: 700; }
 .camera-shutter:hover video { opacity: .78; }
