@@ -49,7 +49,7 @@ const themeIcon = document.getElementById('themeIcon');
 const themeText = document.getElementById('themeText');
 
 function initTheme() {
-    const saved = localStorage.getItem('robonexus_theme') || 'dark';
+    const saved = localStorage.getItem('robonexus_theme') || 'light';
     setTheme(saved);
 }
 
@@ -58,10 +58,10 @@ function setTheme(theme) {
     localStorage.setItem('robonexus_theme', theme);
     if (theme === 'light') {
         themeIcon.innerText = '🌙';
-        themeText.innerText = 'Dark';
+        themeText.innerText = 'Dark Mode';
     } else {
         themeIcon.innerText = '☀️';
-        themeText.innerText = 'Light';
+        themeText.innerText = 'Light Mode';
     }
 }
 
