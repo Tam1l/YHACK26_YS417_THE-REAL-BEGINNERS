@@ -7,6 +7,7 @@ from typing import Optional
 import redis
 from fastapi import FastAPI, HTTPException, Header, Depends, status
 from pydantic import BaseModel, Field, field_validator
+from rads import deadline_risk, rads_score
 
 try:
     import jwt
@@ -68,6 +69,8 @@ class PredictRequest(BaseModel):
     robot_id: str = Field(..., description="Unique identifier of the robot")
     priority: int = Field(..., ge=1, le=9, description="Priority: 1 is Highest, 9 is Lowest")
     image_base64: str = Field(..., description="Base64-encoded JPEG/PNG image")
+    deadline_ms: int = Field(1000, ge=50, le=60000)
+    estimated_inference_ms: int = Field(25, ge=1, le=10000)
 
     @field_validator("image_base64")
     @classmethod
@@ -96,6 +99,10 @@ def predict(request: PredictRequest, auth=Depends(verify_token)):
         task_id = str(uuid.uuid4())
         task_key = f"task:{task_id}"
         now = time.time()
+        now_ms = now * 1000
+        criticality = "CRITICAL" if request.priority == 1 else ("HIGH" if request.priority <= 2 else ("NORMAL" if request.priority <= 5 else "LOW"))
+        queue_delay_ms = int(redis_client.zcard("queue:tasks")) * request.estimated_inference_ms
+        risk = deadline_risk(now_ms, request.deadline_ms, now_ms, queue_delay_ms, request.estimated_inference_ms)
         
         redis_client.hset(task_key, mapping={
             "task_id": task_id,
@@ -104,6 +111,9 @@ def predict(request: PredictRequest, auth=Depends(verify_token)):
             "image_base64": request.image_base64,
             "state": "queued",
             "created_ts": str(now),
+            "deadline_at": str(now + request.deadline_ms / 1000),
+            "deadline_risk": risk,
+            "rads_score": f"{rads_score(criticality, now_ms, request.deadline_ms, now_ms, request.estimated_inference_ms):.4f}",
         })
         
         # Priority Queue: 1 is highest priority (lowest score popped first)
@@ -117,6 +127,7 @@ def predict(request: PredictRequest, auth=Depends(verify_token)):
             "priority": request.priority,
             "state": "queued",
             "submitted_at": now
+            ,"deadline_risk": risk
         }
     except HTTPException:
         raise

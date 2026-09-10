@@ -336,6 +336,7 @@ if redis_ok:
                 "State": d.get("state", "queued").upper(),
                 "Detections": d.get("detection_count", "-"),
                 "Latency (ms)": f"{float(d.get('inference_time_ms', 0)):.1f}" if d.get("inference_time_ms") else "-",
+                "Deadline risk": d.get("deadline_risk", "-") ,
             })
     if hist_rows:
         st.dataframe(pd.DataFrame(hist_rows), width="stretch", hide_index=True)
