@@ -62,15 +62,75 @@ st.markdown("""
         backdrop-filter: blur(8px);
     }
     
-    /* Sidebar Styling */
+    /* Sidebar Styling - Clean Slate-100 with High Readability */
     section[data-testid="stSidebar"] {
-        background-color: #ffffff !important;
+        background-color: #f1f5f9 !important;
         border-right: 1px solid #e2e8f0;
     }
-    section[data-testid="stSidebar"] .stMarkdown h1, 
-    section[data-testid="stSidebar"] .stMarkdown h2, 
-    section[data-testid="stSidebar"] .stMarkdown h3 {
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3 {
         color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+    section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] span {
+        color: #1e293b !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+    }
+    section[data-testid="stSidebar"] .stCaption,
+    section[data-testid="stSidebar"] p {
+        color: #475569 !important;
+    }
+    
+    /* Sleek Light Selectboxes in Sidebar */
+    section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    }
+    section[data-testid="stSidebar"] div[data-baseweb="select"] span,
+    section[data-testid="stSidebar"] div[data-baseweb="select"] div {
+        color: #0f172a !important;
+        font-weight: 500 !important;
+    }
+    section[data-testid="stSidebar"] div[data-baseweb="select"] svg {
+        fill: #64748b !important;
+    }
+
+    /* Sidebar Buttons (Avoid harsh black boxes) */
+    section[data-testid="stSidebar"] .stButton > button {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+        transition: all 0.2s ease !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background: #f8fafc !important;
+        border-color: #94a3b8 !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06) !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button p {
+        color: #0f172a !important;
+    }
+    
+    /* Primary Action Button (Dispatch) */
+    section[data-testid="stSidebar"] div.row-widget.stButton:nth-of-type(1) > button,
+    section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] > div:has(button:contains("Dispatch")) button {
+        background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+        color: #ffffff !important;
+        border: none !important;
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+    }
+    section[data-testid="stSidebar"] div.row-widget.stButton:nth-of-type(1) > button p {
+        color: #ffffff !important;
     }
     
     /* Metric Cards */
