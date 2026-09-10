@@ -1344,7 +1344,10 @@ function closeRobotCamera() {
     activeCameraStream = null;
     const video = document.getElementById('sideCameraVideo');
     if (video) video.srcObject = null;
-    document.getElementById('sideCameraPreview').hidden = true;
+    const preview = document.getElementById('sideCameraPreview');
+    preview.classList.remove('is-open');
+    preview.style.display = 'none';
+    preview.hidden = true;
     document.getElementById('btnSideCamera').innerText = 'Open robot camera';
 }
 async function openRobotCamera() {
@@ -1360,7 +1363,10 @@ async function openRobotCamera() {
         const video = document.getElementById('sideCameraVideo');
         video.srcObject = activeCameraStream;
         await video.play();
-        document.getElementById('sideCameraPreview').hidden = false;
+        const preview = document.getElementById('sideCameraPreview');
+        preview.hidden = false;
+        preview.style.display = 'block';
+        preview.classList.add('is-open');
         document.getElementById('btnSideCamera').innerText = 'Camera is on';
         setSideVisionStatus('Camera is on. Frame is local until Capture and run YOLO.', 'var(--color-emerald)');
     } catch (error) {
