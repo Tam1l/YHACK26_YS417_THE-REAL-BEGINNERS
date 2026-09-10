@@ -1959,23 +1959,9 @@ document.getElementById('btnUploadVision')?.addEventListener('click', () => docu
 document.getElementById('visionImageUpload')?.addEventListener('change', event => queueVisionPhoto(event.target.files?.[0], 'web_upload'));
 document.getElementById('visionCameraCapture')?.addEventListener('change', event => queueVisionPhoto(event.target.files?.[0], 'web_camera'));
 
-// Left dispatcher panel mirrors the top controls, so every legacy mission
-// operation remains available without sacrificing the NextGen canvas.
-function syncSideControl(sideId, mainId, eventName = 'change') {
-    const side = document.getElementById(sideId);
-    const main = document.getElementById(mainId);
-    side?.addEventListener(eventName, () => {
-        main.value = side.value;
-        main.dispatchEvent(new Event(eventName, { bubbles: true }));
-    });
-}
-syncSideControl('sidePresetSelect', 'presetSelect');
-syncSideControl('sideSceneSelect', 'sceneSelect');
-syncSideControl('sideCritSelect', 'critSelect');
-syncSideControl('sideDeadline', 'deadlineSlider', 'input');
-
 document.getElementById('sideDeadline')?.addEventListener('input', event => {
-    document.getElementById('sideDeadlineValue').innerText = `${event.target.value}ms`;
+    const valDisp = document.getElementById('sideDeadlineValue');
+    if (valDisp) valDisp.innerText = `${event.target.value}ms`;
 });
 let activeCameraStream = null;
 function setSideVisionStatus(message, color = 'var(--color-blue)') {
@@ -2037,7 +2023,6 @@ document.getElementById('btnCaptureCamera')?.addEventListener('click', captureRo
 document.getElementById('btnCameraPreviewCapture')?.addEventListener('click', captureRobotCameraFrame);
 document.getElementById('btnOpenVisionCamera')?.addEventListener('click', () => document.getElementById('btnSideCamera')?.click());
 document.getElementById('btnSideUpload')?.addEventListener('click', () => document.getElementById('btnUploadVision')?.click());
-document.getElementById('btnSideDispatch')?.addEventListener('click', () => document.getElementById('btnDispatchTask')?.click());
 document.getElementById('btnSideReset')?.addEventListener('click', () => document.getElementById('btnSystemReset')?.click());
 document.getElementById('btnSideRunYolo')?.addEventListener('click', () => {
     if (!pendingVisionPhoto) return;
@@ -2405,42 +2390,49 @@ document.getElementById('btnSystemReset').addEventListener('click', async () => 
     }
 });
 
-// 8. Custom Task Dispatch (Paced perception demo)
-document.getElementById('deadlineSlider').addEventListener('input', (e) => {
-    document.getElementById('deadlineDisplay').innerText = `${e.target.value}ms`;
-});
+// 8. Custom Task Dispatch (Centralized in Operator Side Panel)
+const sideDlEl = document.getElementById('sideDeadline');
+if (sideDlEl) {
+    sideDlEl.addEventListener('input', (e) => {
+        const disp = document.getElementById('sideDeadlineValue');
+        if (disp) disp.innerText = `${e.target.value}ms`;
+    });
+}
 
-document.getElementById('presetSelect').addEventListener('change', (e) => {
-    const val = e.target.value;
-    const crit = document.getElementById('critSelect');
-    const dl = document.getElementById('deadlineSlider');
-    const disp = document.getElementById('deadlineDisplay');
-    const scn = document.getElementById('sceneSelect');
+const sidePresetEl = document.getElementById('sidePresetSelect');
+if (sidePresetEl) {
+    sidePresetEl.addEventListener('change', (e) => {
+        const val = e.target.value;
+        const crit = document.getElementById('sideCritSelect');
+        const dl = document.getElementById('sideDeadline');
+        const disp = document.getElementById('sideDeadlineValue');
+        const scn = document.getElementById('sideSceneSelect');
 
-    if (val === 'AGV-01') {
-        crit.value = 'CRITICAL';
-        dl.value = 100;
-        scn.value = 'human';
-    } else if (val === 'DRONE-04') {
-        crit.value = 'HIGH';
-        dl.value = 250;
-        scn.value = 'pallet';
-    } else if (val === 'SWEEPER-09') {
-        crit.value = 'NORMAL';
-        dl.value = 600;
-        scn.value = 'dock';
-    } else {
-        crit.value = 'LOW';
-        dl.value = 1500;
-        scn.value = 'clear';
-    }
-    disp.innerText = `${dl.value}ms`;
-});
+        if (val === 'AGV-01') {
+            if (crit) crit.value = 'CRITICAL';
+            if (dl) dl.value = 100;
+            if (scn) scn.value = 'human';
+        } else if (val === 'DRONE-04') {
+            if (crit) crit.value = 'HIGH';
+            if (dl) dl.value = 250;
+            if (scn) scn.value = 'pallet';
+        } else if (val === 'SWEEPER-09') {
+            if (crit) crit.value = 'NORMAL';
+            if (dl) dl.value = 600;
+            if (scn) scn.value = 'dock';
+        } else {
+            if (crit) crit.value = 'LOW';
+            if (dl) dl.value = 1500;
+            if (scn) scn.value = 'clear';
+        }
+        if (disp && dl) disp.innerText = `${dl.value}ms`;
+    });
+}
 
-document.getElementById('btnDispatchTask').addEventListener('click', async () => {
-    const preset = document.getElementById('presetSelect').value;
-    const crit = document.getElementById('critSelect').value;
-    const dl = parseFloat(document.getElementById('deadlineSlider').value);
+async function handleDispatchPerceptionTask() {
+    const preset = document.getElementById('sidePresetSelect')?.value || 'AGV-01';
+    const crit = document.getElementById('sideCritSelect')?.value || 'CRITICAL';
+    const dl = parseFloat(document.getElementById('sideDeadline')?.value || '100');
 
     // Auto-navigate to Tab 5 after brief delay so user can see dispatch feedback
     navigateToTab('tabBenchmarks', '#visionFeedCanvas', true, 1200);
@@ -2470,7 +2462,10 @@ document.getElementById('btnDispatchTask').addEventListener('click', async () =>
     } catch (e) {
         showToast(`Dispatch network error: ${e}`, "error");
     }
-});
+}
+
+document.getElementById('btnSideDispatch')?.addEventListener('click', handleDispatchPerceptionTask);
+document.getElementById('btnDispatchTask')?.addEventListener('click', handleDispatchPerceptionTask);
 
 // ================= TABS SWITCHER =================
 document.querySelectorAll('.tab-btn').forEach(btn => {

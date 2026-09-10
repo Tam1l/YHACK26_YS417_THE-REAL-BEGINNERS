@@ -44,53 +44,7 @@
         </div>
     </header>
 
-    <!-- Quick Dispatch Command Toolbar -->
-    <div class="command-toolbar">
-        <div class="toolbar-group">
-            <span class="toolbar-label">ROBOT DISPATCH:</span>
-            <select class="select-input" id="presetSelect">
-                <option value="AGV-01">🚨 AGV-01: Collision Hazard (CRITICAL - 100ms)</option>
-                <option value="DRONE-04">🚁 DRONE-04: Aerial Navigation (HIGH - 250ms)</option>
-                <option value="SWEEPER-09">🤖 SWEEPER-09: Floor Maintenance (NORMAL - 600ms)</option>
-                <option value="SCANNER-12">📦 SCANNER-12: Bulk Inventory (LOW - 1500ms)</option>
-            </select>
-        </div>
-
-        <div class="toolbar-group">
-            <span class="toolbar-label">SCENE FEED:</span>
-            <select class="select-input" id="sceneSelect">
-                <option value="human">🚨 Emergency: Human Obstacle in Path</option>
-                <option value="pallet">📦 Warehouse Cargo Pallet Obstacle</option>
-                <option value="dock">🔌 Auto-Docking Station</option>
-                <option value="clear">Clear Transit Corridor</option>
-            </select>
-        </div>
-
-        <div class="toolbar-group">
-            <span class="toolbar-label">CRITICALITY:</span>
-            <select class="select-input" id="critSelect">
-                <option value="CRITICAL">CRITICAL</option>
-                <option value="HIGH">HIGH</option>
-                <option value="NORMAL">NORMAL</option>
-                <option value="LOW">LOW</option>
-            </select>
-        </div>
-
-        <div class="toolbar-group slider-group">
-            <span class="toolbar-label">DEADLINE:</span>
-            <input type="range" class="slider-input" id="deadlineSlider" min="50" max="2000" step="50" value="100">
-            <span class="deadline-badge" id="deadlineDisplay">100ms</span>
-        </div>
-
-        <div class="toolbar-group">
-            <button class="btn btn-primary" id="btnDispatchTask">
-                🚀 <span>Dispatch Perception Task</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- Persistent operator panel: combines the original dispatcher controls
-         with the richer NextGen mission-control surface. -->
+    <!-- Persistent operator panel: centralized mission control and YOLO perception dispatcher -->
     <div class="operations-shell">
         <aside class="operator-panel" aria-label="Robot dispatcher controls">
             <div class="panel-heading">
@@ -100,28 +54,37 @@
 
             <label class="panel-label" for="sidePresetSelect">Robot mission</label>
             <select class="select-input panel-input" id="sidePresetSelect">
-                <option value="AGV-01">AGV-01: Collision Avoidance</option>
-                <option value="DRONE-04">DRONE-04: Aerial Navigation</option>
-                <option value="SWEEPER-09">SWEEPER-09: Floor Maintenance</option>
-                <option value="SCANNER-12">SCANNER-12: Bulk Inventory</option>
+                <option value="AGV-01">🚨 AGV-01: Collision Hazard (CRITICAL - 100ms)</option>
+                <option value="DRONE-04">🚁 DRONE-04: Aerial Navigation (HIGH - 250ms)</option>
+                <option value="SWEEPER-09">🤖 SWEEPER-09: Floor Maintenance (NORMAL - 600ms)</option>
+                <option value="SCANNER-12">📦 SCANNER-12: Bulk Inventory (LOW - 1500ms)</option>
             </select>
 
-            <label class="panel-label" for="sideSceneSelect">Camera scene</label>
+            <label class="panel-label" for="sideSceneSelect">Camera scene feed</label>
             <select class="select-input panel-input" id="sideSceneSelect">
-                <option value="human">Emergency: Human in AGV path</option>
-                <option value="pallet">Warehouse pallet obstacle</option>
-                <option value="dock">Auto-docking station</option>
-                <option value="clear">Clear transit corridor</option>
+                <option value="human">🚨 Emergency: Human Obstacle in Path</option>
+                <option value="pallet">📦 Warehouse Cargo Pallet Obstacle</option>
+                <option value="dock">🔌 Auto-Docking Station</option>
+                <option value="clear">Clear Transit Corridor</option>
             </select>
 
             <label class="panel-label" for="sideCritSelect">Criticality</label>
             <select class="select-input panel-input" id="sideCritSelect">
-                <option value="CRITICAL">CRITICAL</option><option value="HIGH">HIGH</option>
-                <option value="NORMAL">NORMAL</option><option value="LOW">LOW</option>
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="HIGH">HIGH</option>
+                <option value="NORMAL">NORMAL</option>
+                <option value="LOW">LOW</option>
             </select>
 
-            <label class="panel-label" for="sideDeadline">Deadline: <b id="sideDeadlineValue">100ms</b></label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                <label class="panel-label" for="sideDeadline" style="margin: 0;">Deadline</label>
+                <span class="deadline-badge" id="sideDeadlineValue">100ms</span>
+            </div>
             <input class="slider-input panel-input" id="sideDeadline" type="range" min="50" max="2000" step="50" value="100">
+
+            <button class="btn btn-primary panel-button" id="btnSideDispatch">
+                🚀 <span>Dispatch Perception Task</span>
+            </button>
 
             <div class="panel-divider"></div>
             <h3>Live YOLO camera</h3>
@@ -146,7 +109,6 @@
             <button class="btn btn-slate panel-button" id="btnSideRunYolo" disabled>Run Real YOLO Inference</button>
             <div id="sideVisionStatus" class="panel-status">Waiting for an operator photo</div>
 
-            <button class="btn btn-primary panel-button" id="btnSideDispatch">Dispatch robot task</button>
             <div class="panel-divider"></div>
             <h3>Quick operations</h3>
             <button class="panel-link" data-side-tab="tabFabric">Dynamic worker fabric</button>

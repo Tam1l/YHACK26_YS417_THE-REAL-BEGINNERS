@@ -204,31 +204,7 @@ body {
     transform: translateY(-1px);
 }
 
-/* ================= MISSION COMMAND TOOLBAR ================= */
-.command-toolbar {
-    background: var(--bg-surface);
-    border-bottom: 1px solid var(--border-subtle);
-    padding: 10px 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-
-.toolbar-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.toolbar-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-muted);
-    letter-spacing: 0.5px;
-}
-
+/* ================= MISSION CONTROL INPUTS ================= */
 .select-input, .text-input {
     background: var(--bg-input);
     color: var(--text-primary);
@@ -1121,8 +1097,8 @@ body {
 
 .operator-panel {
     position: sticky;
-    top: 74px;
-    height: calc(100vh - 86px);
+    top: 62px;
+    height: calc(100vh - 62px);
     overflow-y: auto;
     padding: 16px 14px 24px;
     border-right: 1px solid var(--border-subtle);
@@ -1166,14 +1142,13 @@ body {
     .operations-shell { grid-template-columns: 290px minmax(0, 1fr); }
     .header-bar { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
     .header-status-pills { order: 3; width: 100%; flex-wrap: wrap; }
-    .command-toolbar { justify-content: flex-start; }
     .arena-canvas-container { height: 440px; }
 }
 
 @media (max-width: 720px) {
     .operations-shell { display: block; }
     .operator-panel { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
-    .header-bar, .command-toolbar { padding-left: 12px; padding-right: 12px; }
+    .header-bar { padding-left: 12px; padding-right: 12px; }
     .header-actions { width: 100%; justify-content: space-between; }
     .brand-badge, .brand-sub { display: none; }
     .app-container { padding: 14px 10px 40px; gap: 14px; }
