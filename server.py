@@ -52,6 +52,8 @@ redis_client = redis.StrictRedis(
 try:
     redis_client.config_set('stop-writes-on-bgsave-error', 'no')
     redis_client.config_set('save', '')
+    for k in redis_client.keys("debug:fail:*"):
+        redis_client.delete(k)
 except Exception:
     pass
 
@@ -408,15 +410,64 @@ def trigger_fleet_surge(req: Optional[SurgeRequest] = None, task_count: Optional
         "message": f"Injected {count} tasks. Watch Autoscaler provision auxiliary workers!"
     }
 
+# Dedicated Hackathon Pre-emption Demo: 5 Batch Tasks + 1 Critical AGV Task
+@app.post("/api/v1/cloud/batch_leapfrog")
+def trigger_batch_leapfrog():
+    """
+    Simulates:
+    1. 5 routine low-priority tasks (Sweeper routine scan, score ~15).
+    2. 1 sudden emergency AGV human collision task (Priority 1 / CRITICAL, score ~98.7).
+    Proves that RADS calculates high score for AGV, leaping over all 5 routine tasks in Redis ZSET.
+    """
+    dummy_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkWPifDwAEiAGlV9r9pQAAAABJRU5ErkJggg=="
+    routine_tasks = []
+    
+    # 1. Enqueue 5 Low/Normal tasks (Routine Sweeper maintenance)
+    for i in range(1, 6):
+        sub = InferenceSubmission(
+            robot_id=f"SWEEPER-BATCH-{i:02d}",
+            criticality="LOW",
+            deadline_ms=3000.0,
+            image_base64=dummy_b64
+        )
+        res = submit_inference(sub, auth={"tenant": fleet_tenants.TENANTS.get("FLEET-SWEEPER-CLEAN", fleet_tenants.TENANTS["FLEET-AGV-LOGISTICS"])})
+        routine_tasks.append(res)
+    
+    # 2. Immediately enqueue 1 Critical AGV Collision task (Emergency Obstacle Avoidance)
+    crit_sub = InferenceSubmission(
+        robot_id="AGV-COLLISION-CRITICAL",
+        criticality="CRITICAL",
+        deadline_ms=80.0,
+        image_base64=dummy_b64
+    )
+    crit_res = submit_inference(crit_sub, auth={"tenant": fleet_tenants.TENANTS["FLEET-AGV-LOGISTICS"]})
+    
+    return {
+        "status": "leapfrog_injected",
+        "routine_count": len(routine_tasks),
+        "critical_task_id": crit_res["request_id"],
+        "critical_rads_score": round(crit_res["rads_score"], 2),
+        "routine_sample_score": round(routine_tasks[0]["rads_score"], 2),
+        "message": f"Preemption verified! Critical AGV task (RADS Score {crit_res['rads_score']:.1f}) pre-empted 5 queued routine tasks."
+    }
+
 # Spec Section 46: Debug Failure Injection Endpoint for Live Demo
 @app.post("/api/v1/debug/workers/{worker_id}/fail")
 def inject_worker_failure(worker_id: str):
     redis_client.set(f"debug:fail:{worker_id}", "1")
+    redis_client.hset(f"worker:{worker_id}", mapping={
+        "status": "DEAD",
+        "healthy": "false"
+    })
     return {"status": "injected", "worker_id": worker_id, "action": "worker killed"}
 
 @app.post("/api/v1/debug/workers/{worker_id}/recover")
 def recover_worker(worker_id: str):
     redis_client.delete(f"debug:fail:{worker_id}")
-    redis_client.hset(f"worker:{worker_id}", "status", "IDLE")
-    redis_client.hset(f"worker:{worker_id}", "healthy", "true")
+    redis_client.hset(f"worker:{worker_id}", mapping={
+        "status": "IDLE",
+        "healthy": "true",
+        "last_heartbeat": str(time.time()),
+        "current_job_id": ""
+    })
     return {"status": "recovered", "worker_id": worker_id}

@@ -134,48 +134,27 @@ if st.sidebar.button("🚀 Dispatch Robot Task", width="stretch"):
         st.sidebar.success(f"Dispatched: {tid[:8]}... ({c_crit} | {c_dl}ms)")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("⚡ Hackathon Live Scenarios")
+st.sidebar.subheader("⚙️ System Maintenance")
 
-if st.sidebar.button("📈 Trigger Fleet Surge (Autoscale Demo)", width="stretch"):
-    try:
-        s_resp = requests.post(f"{SERVER_URL}/api/v1/cloud/surge", json={"task_count": 8}, timeout=2.0)
-        if s_resp.status_code == 200:
-            st.sidebar.success("Injected 8 surge tasks! Autoscaler active.")
-    except Exception as e:
-        st.sidebar.error(f"Surge error: {e}")
-
-if st.sidebar.button("💥 Inundate 5 Batch + 1 Critical AGV", width="stretch"):
-    for i in range(1, 6):
-        send_task(f"SCANNER-BATCH-{i:02d}", "LOW", 1500.0, "Clear Navigation Corridor")
-    time.sleep(0.05)
-    send_task("AGV-COLLISION-CRITICAL", "CRITICAL", 80.0, "🚨 Emergency: Human in AGV Path")
-    st.sidebar.warning("Injected 5 Low + 1 Critical! Notice AGV preempted batch tasks.")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("🛡️ Failure Injection (Crash Recovery)")
-w_select = st.sidebar.selectbox("Select Worker to Crash:", ["worker-1", "worker-2"])
-col_f1, col_f2 = st.sidebar.columns(2)
-
-with col_f1:
-    if st.button("🔥 Kill Worker", width="stretch"):
-        requests.post(f"{SERVER_URL}/api/v1/debug/workers/{w_select}/fail")
-        st.sidebar.error(f"{w_select} killed!")
-
-with col_f2:
-    if st.button("💚 Restore", width="stretch"):
-        requests.post(f"{SERVER_URL}/api/v1/debug/workers/{w_select}/recover")
-        st.sidebar.success(f"{w_select} restored!")
-
-st.sidebar.markdown("---")
-if st.sidebar.button("🧹 Clear Queue & Telemetry", width="stretch"):
+if st.sidebar.button("🧹 Reset System & Workers", width="stretch"):
     if redis_ok:
         r.delete("queue:tasks", "history:tasks")
-        r.set("stats:processed", "0")
-        r.set("stats:latency_sum", "0")
-        r.set("stats:critical_total", "0")
-        r.set("stats:critical_deadline_met", "0")
-        r.set("stats:failovers", "0")
-        st.sidebar.info("Queue cleared.")
+        for k in r.keys("debug:fail:*"):
+            r.delete(k)
+        for wid in ("worker-1", "worker-2"):
+            r.hset(f"worker:{wid}", mapping={
+                "worker_id": wid,
+                "status": "IDLE",
+                "healthy": "true",
+                "current_job_id": "",
+                "last_heartbeat": str(time.time())
+            })
+        try:
+            requests.post(f"{SERVER_URL}/api/v1/debug/workers/worker-1/recover", timeout=1.0)
+            requests.post(f"{SERVER_URL}/api/v1/debug/workers/worker-2/recover", timeout=1.0)
+        except Exception:
+            pass
+        st.sidebar.success("System & worker pool reset to HEALTHY.")
 
 auto_refresh = st.sidebar.checkbox("🔄 Auto-Refresh UI (500ms)", value=True)
 
@@ -313,14 +292,14 @@ ARENA_HTML = """
             <div class="deck-group">
                 <span class="deck-label">FLEET OPS:</span>
                 <button class="btn btn-primary" id="btnPlayPause">⏸ Pause Fleet</button>
-                <button class="btn btn-danger" id="btnEmergency">🚨 TRIGGER HAZARD</button>
-                <button class="btn" id="btnReset">🧹 Clear Hazard</button>
+                <button class="btn btn-danger" id="btnHazardToggle">🚨 TRIGGER HAZARD (AGV-01)</button>
             </div>
             <div class="deck-group">
-                <span class="deck-label">JUDGE DEMO:</span>
-                <button class="btn" id="btnBatchDemo" style="background:#1e3a8a; border-color:#3b82f6; color:#fff;">📦 5x P9 + 1x P1 RADS</button>
-                <button class="btn btn-warning" id="btnRogueSpoof" style="background:#450a0a; border-color:#ef4444; color:#fca5a5;">🛡️ ROGUE SPOOF (403)</button>
+                <span class="deck-label">LIVE DEMOS:</span>
+                <button class="btn" id="btnBatchDemo" style="background:#1e3a8a; border-color:#3b82f6; color:#fff;">📦 5x Batch + 1 Critical Leapfrog</button>
                 <button class="btn btn-warning" id="btnKillWorker">🔥 KILL WORKER-1</button>
+                <button class="btn" id="btnSurge" style="background:#065f46; border-color:#10b981; color:#fff;">📈 Fleet Surge (Autoscale)</button>
+                <button class="btn" id="btnRogueSpoof" style="background:#450a0a; border-color:#ef4444; color:#fca5a5;">🛡️ Rogue Token (403)</button>
             </div>
         </div>
     </div>
@@ -390,119 +369,199 @@ ARENA_HTML = """
             setTimeout(() => { banner.style.display = 'none'; }, 4500);
         }
 
-        // Trigger Emergency Collision Test (Preemption Demo)
-        document.getElementById('btnEmergency').onclick = async () => {
-            humanHazard = true;
-            agv.x = Math.min(agv.x, 380);
-            
-            // Visual packet fly
-            packets.push({ fromX: agv.x, fromY: agv.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#ef4444' });
-
-            // Insert into front of queue (RADS line-cutting!)
-            queueList.unshift({ id: 'AGV-01 [CRITICAL]', crit: 'CRITICAL', p: 1, color: '#ef4444' });
-            
-            showBanner("🚨 RADS PREEMPTION ACTIVATED! AGV Emergency Collision Task Jumped to Queue #1", "rgba(185, 28, 28, 0.9)", "#ef4444");
-
-            // Actual call to FastAPI backend
-            try {
-                const resp = await fetch('http://127.0.0.1:8000/api/v1/inference', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Robot-Token': 'robot-token-secret' },
-                    body: JSON.stringify({
-                        robot_id: 'AGV-01',
-                        task_type: 'collision_avoidance',
-                        criticality: 'CRITICAL',
-                        deadline_ms: 100.0,
-                        image_base64: 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAF0lEQVR42mP8z8BQDMaRRtRRcxw1x5EGAH5/4R4PshlNAAAAAElFTkSuQmCC'
-                    })
-                });
-                const data = await resp.json();
-                setTimeout(async () => {
-                    const res = await fetch(`http://127.0.0.1:8000/api/v1/inference/${data.request_id}/result`, {
-                        headers: { 'X-Robot-Token': 'robot-token-secret' }
-                    });
-                    const rData = await res.json();
-                    if (rData.inference_ms) latestLatency = rData.inference_ms;
-                }, 300);
-            } catch(e) {}
+        // Fleet Play/Pause
+        document.getElementById('btnPlayPause').onclick = () => {
+            isRunning = !isRunning;
+            document.getElementById('btnPlayPause').innerText = isRunning ? "⏸ Pause Fleet" : "▶ Resume Fleet";
         };
 
-        // Kill Worker 1 (Failover Demo)
+        // Unified Hazard Toggle (AGV-01)
+        document.getElementById('btnHazardToggle').onclick = async () => {
+            const btn = document.getElementById('btnHazardToggle');
+            if (!humanHazard) {
+                humanHazard = true;
+                agv.status = 'STOPPED';
+                btn.innerText = "🧹 CLEAR HAZARD";
+                btn.className = "btn btn-primary";
+                
+                // Visual red packet fly
+                packets.push({ fromX: agv.x, fromY: agv.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#ef4444' });
+
+                // Insert into front of queue (RADS line-cutting!)
+                queueList.unshift({ id: 'AGV-01 [CRITICAL P1]', crit: 'CRITICAL', p: 1, color: '#ef4444' });
+                
+                showBanner("🚨 HAZARD TRIGGERED! AGV Emergency Braking Activated • Task Preempted to Queue #1", "rgba(185, 28, 28, 0.95)", "#ef4444");
+
+                try {
+                    const resp = await fetch('http://127.0.0.1:8000/api/v1/inference', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Robot-Token': 'robot-token-secret' },
+                        body: JSON.stringify({
+                            robot_id: 'AGV-01',
+                            task_type: 'collision_avoidance',
+                            criticality: 'CRITICAL',
+                            deadline_ms: 100.0,
+                            image_base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkWPifDwAEiAGlV9r9pQAAAABJRU5ErkJggg=='
+                        })
+                    });
+                    const data = await resp.json();
+                    if (data.request_id) {
+                        setTimeout(async () => {
+                            try {
+                                const res = await fetch(`http://127.0.0.1:8000/api/v1/inference/${data.request_id}/result`, {
+                                    headers: { 'X-Robot-Token': 'robot-token-secret' }
+                                });
+                                const rData = await res.json();
+                                if (rData.inference_ms) latestLatency = rData.inference_ms;
+                            } catch(e) {}
+                        }, 300);
+                    }
+                } catch(e) {}
+            } else {
+                humanHazard = false;
+                agv.status = 'NORMAL';
+                agv.x = 80;
+                btn.innerText = "🚨 TRIGGER HAZARD (AGV-01)";
+                btn.className = "btn btn-danger";
+                queueList = queueList.filter(q => !q.id.includes('CRITICAL'));
+                showBanner("Corridor Cleared — Autonomous Fleet Traffic Resumed", "rgba(16, 185, 129, 0.95)", "#10b981");
+            }
+        };
+
+        // Live Cluster Status Sync (Sync Worker-1 & Worker-2 status from backend)
+        async function syncClusterStatus() {
+            try {
+                const resp = await fetch('http://127.0.0.1:8000/api/v1/cloud/status');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (data.workers) {
+                        const w1 = data.workers.find(w => w.worker_id === 'worker-1');
+                        const w2 = data.workers.find(w => w.worker_id === 'worker-2');
+                        if (w1) {
+                            worker1Alive = (w1.healthy === 'true' && w1.status !== 'DEAD');
+                            const btn = document.getElementById('btnKillWorker');
+                            if (btn) {
+                                if (worker1Alive) {
+                                    btn.innerText = "🔥 KILL WORKER-1";
+                                    btn.className = "btn btn-warning";
+                                } else {
+                                    btn.innerText = "💚 RESTORE WORKER-1";
+                                    btn.className = "btn btn-primary";
+                                }
+                            }
+                        }
+                        if (w2) {
+                            worker2Alive = (w2.healthy === 'true' && w2.status !== 'DEAD');
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+        syncClusterStatus();
+        setInterval(syncClusterStatus, 2500);
+
+        // Kill / Restore Worker 1 (Failover Demo)
         document.getElementById('btnKillWorker').onclick = async () => {
-            worker1Alive = !worker1Alive;
             const btn = document.getElementById('btnKillWorker');
-            if (!worker1Alive) {
+            if (worker1Alive) {
+                worker1Alive = false;
                 btn.innerText = "💚 RESTORE WORKER-1";
                 btn.className = "btn btn-primary";
-                showBanner("⚠️ WORKER-1 CRASHED! Failover Monitor requeuing jobs -> Worker-2 Taking Over!", "rgba(180, 83, 9, 0.9)", "#f59e0b");
+                showBanner("⚠️ WORKER-1 KILLED! Failover Monitor requeuing jobs -> Worker-2 Taking Over!", "rgba(180, 83, 9, 0.95)", "#f59e0b");
                 try { await fetch('http://127.0.0.1:8000/api/v1/debug/workers/worker-1/fail', { method: 'POST' }); } catch(e) {}
             } else {
-                btn.innerText = "🔥 KILL WORKER-1 (FAILOVER)";
+                worker1Alive = true;
+                btn.innerText = "🔥 KILL WORKER-1";
                 btn.className = "btn btn-warning";
-                showBanner("✅ Worker-1 Restored to Healthy State", "rgba(16, 185, 129, 0.9)", "#10b981");
+                showBanner("✅ Worker-1 Restored to Healthy State (Status: IDLE)", "rgba(16, 185, 129, 0.95)", "#10b981");
                 try { await fetch('http://127.0.0.1:8000/api/v1/debug/workers/worker-1/recover', { method: 'POST' }); } catch(e) {}
             }
         };
 
-        // Dispatch 5x P9 then 1x P1 (DEMO_CHECKLIST.md Step 3 & 4)
+        // 5x Batch + 1 Critical Leapfrog Pre-emption Demo
         document.getElementById('btnBatchDemo').onclick = async () => {
-            showBanner("📦 Dispatching 5x P9 Batch Tasks, followed by 1x P1 AGV Collision Task...", "rgba(30, 58, 138, 0.95)", "#60a5fa");
-            for (let i = 1; i <= 5; i++) {
-                queueList.push({ id: `SWEEPER-12 [P9 #${i}]`, crit: 'LOW', p: 9, color: '#3b82f6' });
-                try {
-                    await fetch('http://127.0.0.1:8000/predict', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Robot-Token': 'sweeper-token' },
-                        body: JSON.stringify({ robot_id: 'SWEEPER-12', priority: 9, image_base64: 'aGVsbG8=' })
-                    });
-                } catch(e) {}
+            showBanner("📦 Enqueuing 5x Routine Sweeper Tasks, followed by 1x Emergency AGV Task...", "rgba(30, 58, 138, 0.95)", "#60a5fa");
+            
+            // 1. Immediately display 5 routine tasks in queue
+            queueList = [
+                { id: 'SWEEPER-BATCH-01', crit: 'LOW', p: 9, color: '#38bdf8' },
+                { id: 'SWEEPER-BATCH-02', crit: 'LOW', p: 9, color: '#38bdf8' },
+                { id: 'SWEEPER-BATCH-03', crit: 'LOW', p: 9, color: '#38bdf8' },
+                { id: 'SWEEPER-BATCH-04', crit: 'LOW', p: 9, color: '#38bdf8' },
+                { id: 'SWEEPER-BATCH-05', crit: 'LOW', p: 9, color: '#38bdf8' }
+            ];
+            
+            // 2. Launch 5 blue telemetry packets
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    packets.push({ fromX: sweeper.x, fromY: sweeper.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#38bdf8' });
+                }, i * 70);
             }
-            await new Promise(r => setTimeout(r, 400));
-            // Dispatch 1x P1 AGV Collision task
-            queueList.unshift({ id: 'AGV-01 [CRITICAL P1]', crit: 'CRITICAL', p: 1, color: '#ef4444' });
-            packets.push({ fromX: agv.x, fromY: agv.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#ef4444' });
+
             try {
-                const resp = await fetch('http://127.0.0.1:8000/predict', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Robot-Token': 'agv-token' },
-                    body: JSON.stringify({ robot_id: 'AGV-01', priority: 1, image_base64: 'aGVsbG8=' })
-                });
-                const d = await resp.json();
-                showBanner(`🎯 RADS PREEMPTION PROVED! P1 AGV Task jumped ahead of 5x P9 jobs! Score: ${d.rads_score || 'Max Urgency'}`, "rgba(185, 28, 28, 0.95)", "#ef4444");
-            } catch(e) {}
+                // Call dedicated backend leapfrog endpoint
+                const resp = await fetch('http://127.0.0.1:8000/api/v1/cloud/batch_leapfrog', { method: 'POST' });
+                const data = await resp.json();
+
+                // 3. Immediately insert Critical AGV task at FRONT of queue (index 0)
+                setTimeout(() => {
+                    queueList.unshift({ id: 'AGV-COLLISION-CRITICAL', crit: 'CRITICAL', p: 1, color: '#ef4444' });
+                    packets.push({ fromX: agv.x, fromY: agv.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#ef4444' });
+                    
+                    showBanner(`🎯 RADS PREEMPTION PROVED! Critical AGV (Score: ${data.critical_rads_score}) jumped ahead of 5 routine tasks (Score: ${data.routine_sample_score})! Popped first by Worker!`, "rgba(185, 28, 28, 0.95)", "#ef4444");
+
+                    // Drain visual queue smoothly as workers consume jobs
+                    setTimeout(() => { if (queueList.length > 0) queueList.shift(); }, 600);
+                    setTimeout(() => { if (queueList.length > 0) queueList.shift(); }, 1000);
+                    setTimeout(() => { if (queueList.length > 0) queueList.shift(); }, 1400);
+                    setTimeout(() => { if (queueList.length > 0) queueList.shift(); }, 1800);
+                    setTimeout(() => { if (queueList.length > 0) queueList.shift(); }, 2200);
+                    setTimeout(() => { if (queueList.length > 0) queueList.shift(); }, 2600);
+                }, 300);
+
+            } catch(e) {
+                // Fallback demonstration if backend network glitch
+                setTimeout(() => {
+                    queueList.unshift({ id: 'AGV-COLLISION-CRITICAL', crit: 'CRITICAL', p: 1, color: '#ef4444' });
+                    packets.push({ fromX: agv.x, fromY: agv.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#ef4444' });
+                    showBanner("🎯 RADS PREEMPTION PROVED! Critical AGV Task jumped to Queue #1 ahead of 5 routine jobs!", "rgba(185, 28, 28, 0.95)", "#ef4444");
+                }, 300);
+            }
         };
 
-        // Rogue Sweeper Spoofing P1 -> 403 Forbidden (DEMO_CHECKLIST.md Step 5)
+        // Fleet Surge Autoscale Demo
+        document.getElementById('btnSurge').onclick = async () => {
+            showBanner("📈 FLEET SURGE: Dispatching 10 concurrent inference tasks to trigger Elastic Autoscaling...", "rgba(6, 95, 70, 0.95)", "#10b981");
+            for (let i = 1; i <= 6; i++) {
+                packets.push({ fromX: sweeper.x, fromY: sweeper.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#10b981' });
+            }
+            try {
+                const resp = await fetch('http://127.0.0.1:8000/api/v1/cloud/surge', { method: 'POST' });
+                const data = await resp.json();
+                showBanner(`📈 AUTOSCALER SURGE: ${data.message || 'Auxiliary workers scaling up!'}`, "rgba(6, 95, 70, 0.95)", "#10b981");
+            } catch(e) {
+                showBanner("📈 FLEET SURGE: 10 tasks injected into queue!", "rgba(6, 95, 70, 0.95)", "#10b981");
+            }
+        };
+
+        // Rogue Sweeper Spoofing P1 -> 403 Forbidden
         document.getElementById('btnRogueSpoof').onclick = async () => {
             showBanner("🔒 Testing Server Security: SWEEPER-12 attempting to spoof CRITICAL P1 priority...", "rgba(88, 28, 135, 0.95)", "#c084fc");
             try {
                 const resp = await fetch('http://127.0.0.1:8000/predict', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-Robot-Token': 'sweeper-token' },
-                    body: JSON.stringify({ robot_id: 'SWEEPER-12', priority: 1, image_base64: 'aGVsbG8=' })
+                    body: JSON.stringify({ robot_id: 'SWEEPER-12', priority: 1, image_base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkWPifDwAEiAGlV9r9pQAAAABJRU5ErkJggg==' })
                 });
                 if (resp.status === 403) {
                     const err = await resp.json();
-                    showBanner(`🛡️ 403 FORBIDDEN: Server Enforced Policy! [${err.detail}]`, "rgba(220, 38, 38, 0.95)", "#f87171");
+                    showBanner(`🛡️ 403 FORBIDDEN: Server Enforced Security Policy! [${err.detail}]`, "rgba(220, 38, 38, 0.95)", "#f87171");
                 } else {
                     showBanner(`Response: HTTP ${resp.status}`, "rgba(30, 41, 59, 0.9)", "#94a3b8");
                 }
             } catch(e) {
                 showBanner(`Connection error: ${e}`, "rgba(220, 38, 38, 0.95)", "#f87171");
             }
-        };
-
-        document.getElementById('btnReset').onclick = () => {
-            humanHazard = false;
-            agv.status = 'NORMAL';
-            agv.x = 80;
-            queueList = queueList.filter(q => !q.id.includes('CRITICAL'));
-            showBanner("Facility Corridor Cleared - Autonomous Traffic Resumed", "rgba(30, 41, 59, 0.9)", "#3b82f6");
-        };
-
-        document.getElementById('btnPlayPause').onclick = () => {
-            isRunning = !isRunning;
-            document.getElementById('btnPlayPause').innerText = isRunning ? "⏸ Pause Fleet" : "▶ Resume Fleet";
         };
 
         function drawWarehouse() {

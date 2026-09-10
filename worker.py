@@ -107,16 +107,20 @@ class AIWorker(threading.Thread):
         print(f"[+] {self.worker_id} started and ready.")
         while self.running:
             # Check debug kill injection
-            if redis_client.get(f"debug:fail:{self.worker_id}") == "1":
-                self.is_alive = False
-                self.update_heartbeat(status="UNHEALTHY")
-                print(f"[!] SIMULATED CRASH: {self.worker_id} killed by debug trigger!")
-                time.sleep(1)
-                continue
-
-            if not self.is_alive:
+            fail_flag = redis_client.get(f"debug:fail:{self.worker_id}")
+            if fail_flag == "1":
+                if self.is_alive:
+                    self.is_alive = False
+                    self.update_heartbeat(status="UNHEALTHY")
+                    print(f"[!] SIMULATED CRASH: {self.worker_id} killed by debug trigger!")
                 time.sleep(0.5)
                 continue
+            else:
+                # Auto-recover if failure flag is cleared/removed
+                if not self.is_alive:
+                    self.is_alive = True
+                    self.update_heartbeat(status="IDLE")
+                    print(f"[+] RECOVERED: {self.worker_id} restored to healthy operation!")
 
             self.update_heartbeat(status="IDLE")
             
@@ -285,6 +289,22 @@ def main():
     print("ROBONEXUS — ENTERPRISE ROBOT AI PRIVATE CLOUD WORKER POOL")
     print("Base Workers: Worker-1, Worker-2 | Elastic Autoscaler: ACTIVE")
     print("=" * 65)
+    
+    # Clean up any stale crash injection flags from previous runs
+    try:
+        for k in redis_client.keys("debug:fail:*"):
+            redis_client.delete(k)
+        for wid in ("worker-1", "worker-2"):
+            redis_client.hset(f"worker:{wid}", mapping={
+                "worker_id": wid,
+                "status": "IDLE",
+                "healthy": "true",
+                "current_job_id": "",
+                "last_heartbeat": str(time.time()),
+                "processed_jobs": "0"
+            })
+    except Exception as e:
+        print(f"[*] Redis init note: {e}")
     
     worker1 = AIWorker("worker-1")
     worker2 = AIWorker("worker-2")
