@@ -994,10 +994,10 @@ body {
 }
 
 .operations-shell {
-    max-width: 1740px;
+    max-width: 1800px;
     margin: 0 auto;
     display: grid;
-    grid-template-columns: 278px minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
     align-items: start;
 }
 
@@ -1012,22 +1012,23 @@ body {
     top: 74px;
     height: calc(100vh - 86px);
     overflow-y: auto;
-    padding: 18px;
+    padding: 16px 18px 24px;
     border-right: 1px solid var(--border-subtle);
     background: var(--bg-surface);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 9px;
+    box-shadow: 5px 0 18px rgba(15, 23, 42, 0.04);
 }
 
-.panel-heading { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-.panel-heading-icon { font-size: 25px; }
+.panel-heading { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--border-subtle); border-radius: 10px; background: var(--bg-input); font-size: 14px; }
+.panel-heading-icon { width: 31px; height: 31px; display: grid; place-items: center; border-radius: 8px; background: var(--color-blue); font-size: 18px; }
 .panel-heading small { display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted); }
 .panel-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
-.panel-input { width: 100%; }
-.operator-panel h3 { font-size: 13px; margin-top: 2px; }
-.panel-help { color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
-.panel-divider { height: 1px; background: var(--border-subtle); margin: 7px 0; }
+.panel-input { width: 100%; min-height: 36px; }
+.operator-panel h3 { font-size: 13px; margin-top: 3px; color: var(--text-primary); }
+.panel-help { color: var(--text-secondary); font-size: 11px; line-height: 1.45; padding: 8px 9px; border-radius: 7px; background: var(--bg-input); }
+.panel-divider { height: 1px; background: var(--border-subtle); margin: 8px 0; }
 .panel-button { width: 100%; justify-content: center; }
 .panel-check { font-size: 11px; color: var(--text-secondary); display: flex; gap: 7px; align-items: flex-start; }
 .panel-check input { margin-top: 2px; accent-color: var(--color-blue); }
@@ -1046,7 +1047,7 @@ body {
 
 /* Keep the command surface readable from laptops through projector screens. */
 @media (max-width: 1180px) {
-    .operations-shell { grid-template-columns: 238px minmax(0, 1fr); }
+    .operations-shell { grid-template-columns: 268px minmax(0, 1fr); }
     .header-bar { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
     .header-status-pills { order: 3; width: 100%; flex-wrap: wrap; }
     .command-toolbar { justify-content: flex-start; }

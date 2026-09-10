@@ -25,6 +25,8 @@ let worker1Alive = true;
 let worker2Alive = true;
 let latestLatency = 17.8;
 let latestClusterData = null;
+let latestVisionFrame = null;
+let arenaVisionImage = null;
 
 // Telemetry packets in flight
 let packets = [];
@@ -302,17 +304,49 @@ function drawCameraHUD(w, light) {
     ctx.font = 'bold 10px sans-serif';
     ctx.fillText(isStopped ? "🚨 AGV-01 TELEMETRY FEED" : "👁️ AGV-01 PERCEPTION STREAM", hudX + 10, hudY + 18);
 
-    // Bounding box viewfinder
+    // Bounding box viewfinder.  Once an operator uploads or captures a
+    // frame, this is the real YOLO image and its returned detections.
     ctx.fillStyle = light ? '#f1f5f9' : '#000000';
     ctx.fillRect(hudX + 8, hudY + 26, hudW - 16, 78);
 
-    ctx.strokeStyle = isStopped ? '#ef4444' : '#10b981';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(hudX + 35, hudY + 36, 120, 56);
+    const viewX = hudX + 8, viewY = hudY + 26, viewW = hudW - 16, viewH = 78;
+    const perception = latestVisionFrame?.perception || {};
+    const hasVision = arenaVisionImage?.complete && arenaVisionImage.naturalWidth > 0 && latestVisionFrame;
+    if (hasVision) {
+        const scale = Math.min(viewW / arenaVisionImage.naturalWidth, viewH / arenaVisionImage.naturalHeight);
+        const renderW = arenaVisionImage.naturalWidth * scale;
+        const renderH = arenaVisionImage.naturalHeight * scale;
+        const renderX = viewX + (viewW - renderW) / 2;
+        const renderY = viewY + (viewH - renderH) / 2;
+        ctx.drawImage(arenaVisionImage, renderX, renderY, renderW, renderH);
+        (latestVisionFrame.boxes || []).slice(0, 8).forEach((box, index) => {
+            const cls = (latestVisionFrame.classes || [])[index] || 'object';
+            const confidence = (latestVisionFrame.confidences || [])[index] || 0;
+            const red = cls.toLowerCase() === 'person' || perception.hazard_detected;
+            const color = red ? '#ef4444' : '#06b6d4';
+            const bx = renderX + box[0] * scale;
+            const by = renderY + box[1] * scale;
+            const bw = (box[2] - box[0]) * scale;
+            const bh = (box[3] - box[1]) * scale;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.4;
+            ctx.strokeRect(bx, by, bw, bh);
+            ctx.fillStyle = color;
+            ctx.font = 'bold 7px monospace';
+            ctx.fillText(`${cls.toUpperCase()} ${(confidence * 100).toFixed(0)}%`, bx + 2, Math.max(viewY + 8, by + 8));
+        });
+        ctx.fillStyle = perception.hazard_detected ? '#dc2626' : '#059669';
+        ctx.font = 'bold 8px monospace';
+        ctx.fillText(`YOLO: ${perception.action || 'CLEAR'}`, hudX + 10, hudY + 116);
+    } else {
+        ctx.strokeStyle = isStopped ? '#ef4444' : '#10b981';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(hudX + 35, hudY + 36, 120, 56);
 
-    ctx.fillStyle = isStopped ? '#ef4444' : '#10b981';
-    ctx.font = 'bold 9px monospace';
-    ctx.fillText(isStopped ? 'TARGET: HUMAN (98%)' : 'TARGET: CLEAR (94%)', hudX + 40, hudY + 50);
+        ctx.fillStyle = isStopped ? '#ef4444' : '#10b981';
+        ctx.font = 'bold 9px monospace';
+        ctx.fillText(isStopped ? 'TARGET: HUMAN (98%)' : 'AWAITING OPERATOR FRAME', hudX + 40, hudY + 50);
+    }
 
     if (isStopped) {
         ctx.fillStyle = '#dc2626';
@@ -323,7 +357,7 @@ function drawCameraHUD(w, light) {
 
     ctx.fillStyle = isStopped ? '#dc2626' : (light ? '#64748b' : '#94a3b8');
     ctx.font = isStopped ? 'bold 9px monospace' : '10px monospace';
-    ctx.fillText(isStopped ? "TELEMETRY: RED [URLLC SLICE]" : `LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`, hudX + 10, hudY + 122);
+    ctx.fillText(hasVision ? `LATENCY: ${latestLatency.toFixed(1)}ms [YOLO COMPLETE]` : (isStopped ? "TELEMETRY: RED [URLLC SLICE]" : `LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`), hudX + 10, hudY + 130);
 }
 
 // ================= SIMULATION PHYSICS & UPDATE =================
@@ -593,6 +627,24 @@ async function pollTelemetry() {
             fetch('/api/v1/cloud/benchmarks').catch(() => null)
         ]);
 
+        // Vision is safety-critical. Populate the operator frame before any
+        // optional metrics/widget renderer can fail and interrupt this cycle.
+        if (feedRes && feedRes.ok) {
+            const f = await feedRes.json();
+            if (f.latest_frame) {
+                if (f.latest_frame.inference_time_ms) {
+                    latestLatency = parseFloat(f.latest_frame.inference_time_ms);
+                } else if (f.latest_frame.total_latency_ms) {
+                    latestLatency = parseFloat(f.latest_frame.total_latency_ms);
+                }
+                updateVisionFeed(f.latest_frame);
+            }
+            if (f.recent_tasks && f.recent_tasks.length > 0) {
+                if (f.recent_tasks[0].latency_ms) latestLatency = parseFloat(f.recent_tasks[0].latency_ms);
+                updateExecutionStream(f.recent_tasks);
+            }
+        }
+
         if (healthRes && healthRes.ok) {
             const h = await healthRes.json();
             if (h && h.status) {
@@ -632,24 +684,6 @@ async function pollTelemetry() {
         if (incidentsRes && incidentsRes.ok) {
             const inc = await incidentsRes.json();
             updateIncidentsTab(Array.isArray(inc) ? inc : (inc.incidents || []));
-        }
-
-        if (feedRes && feedRes.ok) {
-            const f = await feedRes.json();
-            if (f.latest_frame) {
-                if (f.latest_frame.inference_time_ms) {
-                    latestLatency = parseFloat(f.latest_frame.inference_time_ms);
-                } else if (f.latest_frame.total_latency_ms) {
-                    latestLatency = parseFloat(f.latest_frame.total_latency_ms);
-                }
-                updateVisionFeed(f.latest_frame);
-            }
-            if (f.recent_tasks && f.recent_tasks.length > 0) {
-                if (f.recent_tasks[0].latency_ms) {
-                    latestLatency = parseFloat(f.recent_tasks[0].latency_ms);
-                }
-                updateExecutionStream(f.recent_tasks);
-            }
         }
 
         if (benchRes && benchRes.ok) {
@@ -975,6 +1009,7 @@ document.getElementById('btnCopyIncidentJson')?.addEventListener('click', () => 
 // ================= TAB 5: LIVE VISION FEED & BENCHMARKS =================
 function updateVisionFeed(frame) {
     if (!frame) return;
+    latestVisionFrame = frame;
     const canvas = document.getElementById('visionFeedCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -1001,6 +1036,7 @@ function updateVisionFeed(frame) {
     if (frame.image_base64) {
         const img = new Image();
         img.onload = () => {
+            arenaVisionImage = img;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
