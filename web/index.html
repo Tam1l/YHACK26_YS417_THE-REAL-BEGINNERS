@@ -137,6 +137,10 @@
                     <button class="btn btn-slate" id="btnCloseCamera">Close camera</button>
                 </div>
             </div>
+            <div class="operator-image-card" id="sideCapturedImageCard" hidden>
+                <div class="operator-image-label">Latest operator frame</div>
+                <img id="sideCapturedImage" alt="Latest camera or uploaded image submitted to YOLO">
+            </div>
             <button class="btn btn-primary panel-button" id="btnSideUpload">Upload JPEG / PNG</button>
             <label class="panel-check"><input id="sideAutoYolo" type="checkbox" checked> Process each selected photo automatically</label>
             <button class="btn btn-slate panel-button" id="btnSideRunYolo" disabled>Run Real YOLO Inference</button>

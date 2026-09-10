@@ -1333,8 +1333,22 @@ async function submitVisionPhoto(file, source) {
 }
 
 let pendingVisionPhoto = null;
+function showSelectedOperatorImage(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        const image = document.getElementById('sideCapturedImage');
+        const card = document.getElementById('sideCapturedImageCard');
+        if (image && card) {
+            image.src = reader.result;
+            card.hidden = false;
+        }
+    };
+    reader.readAsDataURL(file);
+}
 function queueVisionPhoto(file, source) {
     if (!file) return;
+    showSelectedOperatorImage(file);
     const auto = document.getElementById('sideAutoYolo');
     if (!auto || auto.checked) {
         submitVisionPhoto(file, source);

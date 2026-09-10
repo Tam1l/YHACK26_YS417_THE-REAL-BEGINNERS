@@ -1044,6 +1044,10 @@ body {
 .camera-shutter:hover video { opacity: .78; }
 .camera-preview-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 7px; }
 .camera-preview-actions .btn { padding: 7px 5px; font-size: 10px; justify-content: center; }
+.operator-image-card { flex: 0 0 auto; overflow: hidden; border: 1px solid var(--border-card); border-radius: 8px; background: var(--bg-input); }
+.operator-image-card[hidden] { display: none !important; }
+.operator-image-label { padding: 6px 8px; color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
+.operator-image-card img { display: block; width: 100%; max-height: 175px; object-fit: cover; background: #020617; border-top: 1px solid var(--border-subtle); }
 
 /* Keep the command surface readable from laptops through projector screens. */
 @media (max-width: 1180px) {
