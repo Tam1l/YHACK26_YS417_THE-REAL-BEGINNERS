@@ -366,6 +366,21 @@ body {
     transform: translateY(-1px);
 }
 
+.btn-tab-tag {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.12);
+    color: inherit;
+    letter-spacing: 0.4px;
+    opacity: 0.9;
+}
+
+[data-theme="dark"] .btn-tab-tag {
+    background: rgba(255, 255, 255, 0.18);
+}
+
 .btn-primary {
     background: linear-gradient(135deg, var(--color-blue), var(--color-blue-dark));
     color: #ffffff;
@@ -976,4 +991,34 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+}
+
+/* ================= AUTO-NAVIGATE TAB FOCUS & CENTER ================= */
+html {
+    scroll-behavior: smooth;
+}
+
+.tab-focus-pulse {
+    position: relative;
+    animation: focusGlowPulse 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+    border-radius: 10px;
+}
+
+@keyframes focusGlowPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.85);
+        outline: 2px solid var(--color-blue);
+    }
+    30% {
+        box-shadow: 0 0 0 10px rgba(14, 165, 233, 0.35);
+        outline: 2px solid var(--color-blue);
+    }
+    70% {
+        box-shadow: 0 0 0 5px rgba(14, 165, 233, 0.15);
+        outline: 2px solid var(--color-blue);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+        outline: 2px solid transparent;
+    }
 }

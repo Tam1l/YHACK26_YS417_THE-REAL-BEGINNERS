@@ -996,6 +996,50 @@ document.getElementById('btnRefreshFeed')?.addEventListener('click', async () =>
     }
 });
 
+// ================= AUTO-NAVIGATE & CENTER ON TAB =================
+function navigateToTab(tabId, targetSelector = null, pulse = true) {
+    // 1. Activate matching tab button
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        if (b.getAttribute('data-tab') === tabId) {
+            b.classList.add('active');
+        } else {
+            b.classList.remove('active');
+        }
+    });
+
+    // 2. Activate matching tab panel
+    document.querySelectorAll('.tab-panel').forEach(p => {
+        if (p.id === tabId) {
+            p.classList.add('active');
+        } else {
+            p.classList.remove('active');
+        }
+    });
+
+    // 3. Smoothly center the element or tab in the viewport
+    const targetEl = targetSelector ? document.querySelector(targetSelector) : document.getElementById(tabId);
+    const scrollTarget = targetEl || document.getElementById(tabId);
+
+    if (scrollTarget) {
+        setTimeout(() => {
+            scrollTarget.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+
+            if (pulse) {
+                scrollTarget.classList.remove('tab-focus-pulse');
+                void scrollTarget.offsetWidth; // Force CSS reflow
+                scrollTarget.classList.add('tab-focus-pulse');
+                setTimeout(() => {
+                    scrollTarget.classList.remove('tab-focus-pulse');
+                }, 2400);
+            }
+        }, 100);
+    }
+}
+window.navigateToTab = navigateToTab;
+
 // ================= DEMO ACTIONS & CONTROLS =================
 // 1. Play / Pause
 document.getElementById('btnPlayPause').addEventListener('click', (e) => {
@@ -1004,46 +1048,49 @@ document.getElementById('btnPlayPause').addEventListener('click', (e) => {
     showToast(isRunning ? "Fleet Simulation Resumed" : "Fleet Simulation Paused", "info");
 });
 
-// 2. Hazard Toggle
+// 2. Hazard Toggle (Navigates to Tab 4: S3 Incident Black-Box)
 document.getElementById('btnHazard').addEventListener('click', () => {
     humanHazard = !humanHazard;
     const btn = document.getElementById('btnHazard');
     if (humanHazard) {
         humanPos = { x: agv.x + 85, y: 265 };
-        btn.innerHTML = '🟢 <span>CLEAR HAZARD</span>';
+        btn.innerHTML = '🟢 <span>CLEAR HAZARD</span> <span class="btn-tab-tag">Tab 4</span>';
         showBanner("🚨 SAFETY CRITICAL: HUMAN OBSTACLE DETECTED IN AGV PATH! EMERGENCY BRAKE ACTIVE.", "rgba(220, 38, 38, 0.95)", "#ef4444");
-        showToast("Hazard Obstacle Triggered: AGV LiDAR safety brake engaged!", "error");
+        showToast("Hazard Triggered: AGV emergency brake active! Auto-navigating to Tab 4 (S3 Incident Black-Box)...", "error", 4500);
+        navigateToTab('tabIncidents', '#incidentsTableBody');
     } else {
-        btn.innerHTML = '🚨 <span>TRIGGER HAZARD (AGV-01)</span>';
+        btn.innerHTML = '🚨 <span>TRIGGER HAZARD (AGV-01)</span> <span class="btn-tab-tag">Tab 4</span>';
         showBanner("✅ PATH CLEAR: AGV RESUMING AUTONOMOUS TRANSIT", "rgba(16, 185, 129, 0.95)", "#10b981");
         showToast("Hazard cleared. AGV resuming normal speed.", "success");
     }
 });
 
-// 3. Batch Leapfrog (RADS Priority Preemption)
+// 3. Batch Leapfrog (Navigates to Tab 5: Real-Time Execution Stream)
 document.getElementById('btnBatchDemo').addEventListener('click', async () => {
     showBanner("📦 INJECTING 5x ROUTINE BATCH + 1 CRITICAL AGV LEAPFROG TASK...", "rgba(37, 99, 235, 0.95)", "#2563eb");
+    navigateToTab('tabBenchmarks', '#taskExecutionStreamBody');
     try {
         const res = await fetch('/api/v1/cloud/batch_leapfrog', { method: 'POST' });
         const data = await res.json();
-        showToast(`Preemption Verified! Critical AGV (RADS ${data.critical_rads_score}) pre-empted 5 queued tasks!`, "success", 5000);
+        showToast(`Preemption Verified! Critical AGV (RADS ${data.critical_rads_score}) pre-empted 5 queued tasks! Auto-navigated to Tab 5 (Execution Stream).`, "success", 5000);
         showBanner(`⚡ PREEMPTION CONFIRMED: AGV-01 LEAPFROGGED 5 ROUTINE TASKS!`, "rgba(16, 185, 129, 0.95)", "#10b981");
     } catch (e) {
         showToast(`Batch Leapfrog error: ${e}`, "error");
     }
 });
 
-// 4. Kill Worker-1 / Restore Worker-1
+// 4. Kill Worker-1 / Restore Worker-1 (Navigates to Tab 1: Worker Fabric)
 document.getElementById('btnKillWorker').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
+    navigateToTab('tabFabric', '#workersListContainer');
     if (worker1Alive) {
         try {
             await fetch('/api/v1/debug/workers/worker-1/fail', { method: 'POST' });
             worker1Alive = false;
-            btn.innerHTML = '⚡ <span>RESTORE WORKER-1</span>';
+            btn.innerHTML = '⚡ <span>RESTORE WORKER-1</span> <span class="btn-tab-tag">Tab 1</span>';
             btn.className = 'btn btn-emerald';
             showBanner("🔥 WORKER-1 CRASHED! ATOMIC FAILOVER REQUEUE ENGAGED.", "rgba(245, 158, 11, 0.95)", "#f59e0b");
-            showToast("Worker-1 killed! In-flight perception jobs peer-recovered by Worker-2 with ZERO data loss!", "warning", 5000);
+            showToast("Worker-1 killed! Centered on Tab 1 (Worker Pod Fabric) to observe instant peer failover!", "warning", 5000);
         } catch (err) {
             showToast(`Fail error: ${err}`, "error");
         }
@@ -1051,30 +1098,31 @@ document.getElementById('btnKillWorker').addEventListener('click', async (e) => 
         try {
             await fetch('/api/v1/debug/workers/worker-1/recover', { method: 'POST' });
             worker1Alive = true;
-            btn.innerHTML = '🔥 <span>KILL WORKER-1</span>';
+            btn.innerHTML = '🔥 <span>KILL WORKER-1</span> <span class="btn-tab-tag">Tab 1</span>';
             btn.className = 'btn btn-warning';
             showBanner("⚡ WORKER-1 RESTORED & RE-JOINED COMPUTE CLUSTER.", "rgba(16, 185, 129, 0.95)", "#10b981");
-            showToast("Worker-1 restored to cluster pool.", "success");
+            showToast("Worker-1 restored to cluster pool! Centered on Tab 1 (Worker Fabric).", "success");
         } catch (err) {
             showToast(`Recover error: ${err}`, "error");
         }
     }
 });
 
-// Helper for individual cards
+// Helper for individual worker cards
 window.toggleWorker = async function(wid, healthy) {
     const action = healthy ? 'fail' : 'recover';
     await fetch(`/api/v1/debug/workers/${wid}/${action}`, { method: 'POST' });
     showToast(`Worker ${wid} ${action === 'fail' ? 'killed' : 'recovered'} successfully.`, healthy ? "warning" : "success");
 };
 
-// 5. Fleet Surge (Autoscaler)
+// 5. Fleet Surge (Navigates to Tab 2: Elastic Cloud Autoscaler)
 document.getElementById('btnSurge').addEventListener('click', async () => {
     showBanner("📈 FLEET SURGE: INJECTING 10 RAPID TASKS TO TRIGGER KEDA AUTOSCALER...", "rgba(16, 185, 129, 0.95)", "#059669");
+    navigateToTab('tabAutoscaler', '#autoscalerLogContainer');
     try {
         const res = await fetch('/api/v1/cloud/surge', { method: 'POST' });
         const data = await res.json();
-        showToast("Fleet Surge Injected (10 tasks)! Watch Autoscaler tab provision auxiliary pods!", "info", 5000);
+        showToast("Fleet Surge Injected (10 tasks)! Centered on Tab 2 (Autoscaler) to watch pod provisioning in real-time!", "info", 5000);
     } catch (e) {
         showToast(`Surge error: ${e}`, "error");
     }
@@ -1082,9 +1130,10 @@ document.getElementById('btnSurge').addEventListener('click', async () => {
 
 const DUMMY_BASE64_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
-// 6. Rogue Token (Zero-Trust 403 Rejection)
+// 6. Rogue Token (Navigates to Tab 3: Multi-Tenant Fleet Governance)
 document.getElementById('btnRogue').addEventListener('click', async () => {
     showBanner("🛡️ INGRESS GATEWAY: INJECTING UNAUTHORIZED ROGUE SPOOFED TOKEN...", "rgba(225, 29, 72, 0.95)", "#e11d48");
+    navigateToTab('tabTenants', '#tenantsListContainer');
     try {
         const res = await fetch('/api/v1/inference', {
             method: 'POST',
@@ -1102,7 +1151,7 @@ document.getElementById('btnRogue').addEventListener('click', async () => {
         });
 
         if (res.status === 403) {
-            showToast("Zero-Trust Gateway: Rogue token REJECTED with HTTP 403 Forbidden!", "security", 5000);
+            showToast("Zero-Trust Gateway: Rogue token REJECTED with HTTP 403 Forbidden! Centered on Tab 3 (Fleet Governance).", "security", 5000);
             showBanner("🛡️ PERIMETER SECURED: ROGUE TOKEN BLOCKED (HTTP 403 FORBIDDEN)", "rgba(225, 29, 72, 0.95)", "#e11d48");
         } else {
             showToast(`Unexpected status: ${res.status}`, "warning");
@@ -1122,8 +1171,8 @@ document.getElementById('btnSystemReset').addEventListener('click', async () => 
         worker1Alive = true;
         worker2Alive = true;
         humanHazard = false;
-        document.getElementById('btnHazard').innerHTML = '🚨 <span>TRIGGER HAZARD (AGV-01)</span>';
-        document.getElementById('btnKillWorker').innerHTML = '🔥 <span>KILL WORKER-1</span>';
+        document.getElementById('btnHazard').innerHTML = '🚨 <span>TRIGGER HAZARD (AGV-01)</span> <span class="btn-tab-tag">Tab 4</span>';
+        document.getElementById('btnKillWorker').innerHTML = '🔥 <span>KILL WORKER-1</span> <span class="btn-tab-tag">Tab 1</span>';
         document.getElementById('btnKillWorker').className = 'btn btn-warning';
         showToast("System & Worker Nodes fully reset to HEALTHY.", "success");
     } catch (e) {
@@ -1131,7 +1180,7 @@ document.getElementById('btnSystemReset').addEventListener('click', async () => 
     }
 });
 
-// 8. Custom Task Dispatch
+// 8. Custom Task Dispatch (Navigates to Tab 5: Live Perception Stream)
 document.getElementById('deadlineSlider').addEventListener('input', (e) => {
     document.getElementById('deadlineDisplay').innerText = `${e.target.value}ms`;
 });
@@ -1168,6 +1217,9 @@ document.getElementById('btnDispatchTask').addEventListener('click', async () =>
     const crit = document.getElementById('critSelect').value;
     const dl = parseFloat(document.getElementById('deadlineSlider').value);
 
+    // Auto-navigate to Tab 5 to watch the live perception inference feed
+    navigateToTab('tabBenchmarks', '#visionFeedCanvas');
+
     try {
         const res = await fetch('/api/v1/inference', {
             method: 'POST',
@@ -1186,7 +1238,7 @@ document.getElementById('btnDispatchTask').addEventListener('click', async () =>
 
         if (res.ok) {
             const data = await res.json();
-            showToast(`Task Dispatched: ${data.request_id.substring(0, 8)}... (${crit} | ${dl}ms)`, "success");
+            showToast(`Task Dispatched: ${data.request_id.substring(0, 8)}... (${crit} | ${dl}ms). Centered on Tab 5 (Perception Stream).`, "success");
         } else {
             showToast(`Dispatch failed: ${res.statusText}`, "error");
         }
@@ -1198,12 +1250,8 @@ document.getElementById('btnDispatchTask').addEventListener('click', async () =>
 // ================= TABS SWITCHER =================
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-
-        btn.classList.add('active');
         const targetId = btn.getAttribute('data-tab');
-        document.getElementById(targetId).classList.add('active');
+        navigateToTab(targetId, null, false);
     });
 });
 
