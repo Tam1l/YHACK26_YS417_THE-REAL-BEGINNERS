@@ -155,7 +155,7 @@ custom_scene = st.sidebar.selectbox(
     index=0 if preset["p"] == 1 else (1 if preset["p"] == 2 else 2)
 )
 
-if st.sidebar.button("🚀 Dispatch Robot Task", use_container_width=True):
+if st.sidebar.button("🚀 Dispatch Robot Task", width="stretch"):
     tid = send_task(preset["id"], preset["p"], custom_scene)
     if tid:
         st.sidebar.success(f"Dispatched: {tid[:8]}... (Priority {preset['p']})")
@@ -164,7 +164,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⚡ Hackathon Live Demo")
 st.sidebar.caption("Demonstrate Strict Priority Preemption:")
 
-if st.sidebar.button("💥 Flood 5 Batch Tasks + 1 Critical AGV", use_container_width=True):
+if st.sidebar.button("💥 Flood 5 Batch Tasks + 1 Critical AGV", width="stretch"):
     # Flood low-priority tasks
     for i in range(1, 6):
         send_task(f"SCANNER-BATCH-0{i}", 9, "Clear Navigation Corridor")
@@ -173,7 +173,7 @@ if st.sidebar.button("💥 Flood 5 Batch Tasks + 1 Critical AGV", use_container_
     send_task("AGV-COLLISION-CRITICAL", 1, "🚨 Emergency: Human in AGV Path")
     st.sidebar.warning("Injected 5 Low (P9) + 1 Critical (P1)! Observe P1 jumped the queue!")
 
-if st.sidebar.button("🧹 Clear Queue & Reset Telemetry", use_container_width=True):
+if st.sidebar.button("🧹 Clear Queue & Reset Telemetry", width="stretch"):
     if redis_ok:
         r.delete("queue:tasks", "history:tasks")
         r.set("stats:processed", "0")
@@ -276,7 +276,7 @@ with view_col1:
                 "Task ID": tid[:8] + "...",
                 "State": tdata.get("state", "queued").upper()
             })
-        st.dataframe(pd.DataFrame(q_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(q_rows), width="stretch", hide_index=True)
         st.caption("Notice: Lower Priority Score is popped FIRST by the AI worker.")
     else:
         st.info("✅ Queue is currently empty! All tasks have been processed by the AI worker.")
@@ -309,8 +309,7 @@ with view_col2:
                 
                 st.image(
                     pil_img,
-                    caption=f"Robot: {latest_task.get('robot_id')} | Latency: {latest_task.get('inference_time_ms')}ms | Objects Detected: {len(boxes)}",
-                    use_container_width=True
+                    caption=f"Robot: {latest_task.get('robot_id')} | Latency: {latest_task.get('inference_time_ms')}ms | Objects Detected: {len(boxes)}"
                 )
             except Exception as e:
                 st.warning(f"Preview rendering: {e}")
@@ -339,7 +338,7 @@ if redis_ok:
                 "Latency (ms)": f"{float(d.get('inference_time_ms', 0)):.1f}" if d.get("inference_time_ms") else "-",
             })
     if hist_rows:
-        st.dataframe(pd.DataFrame(hist_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(hist_rows), width="stretch", hide_index=True)
     else:
         st.info("Awaiting robot activity.")
 
