@@ -269,6 +269,25 @@ if st.sidebar.button("🚀 Dispatch Robot Task", width="stretch"):
         st.sidebar.success(f"Dispatched: {tid[:8]}... ({c_crit} | {c_dl}ms)")
 
 st.sidebar.markdown("---")
+st.sidebar.subheader("🚀 Advanced Architecture Demos")
+
+if st.sidebar.button("🛡️ Edge-Cloud Fallback", width="stretch", help="Demonstrates protective rejection of unreachable 15ms safety tasks with EXECUTE_AT_EDGE"):
+    try:
+        fb_resp = requests.post(f"{SERVER_URL}/api/v1/cloud/demo_edge_fallback", timeout=2.0)
+        fb_data = fb_resp.json()
+        st.sidebar.warning(f"🛡️ Circuit Breaker: {fb_data.get('status')}! Latency {fb_data.get('predicted_latency_ms')}ms > {fb_data.get('deadline_ms')}ms deadline. Handed over to edge.")
+    except Exception as e:
+        st.sidebar.error(f"Fallback error: {e}")
+
+if st.sidebar.button("📊 Export Lakehouse Parquet", width="stretch", help="Batch ETL: Exports Redis telemetry & MinIO incidents into Snappy Parquet in s3://robonexus-analytics/"):
+    try:
+        import batch_exporter
+        exp_meta = batch_exporter.export_fleet_telemetry_lakehouse(r)
+        st.sidebar.success(f"📊 Exported {exp_meta['row_count']} rows to {exp_meta['s3_analytics_uri']} ({(exp_meta['file_size_bytes']/1024):.1f} KB)")
+    except Exception as e:
+        st.sidebar.error(f"Export error: {e}")
+
+st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ System Maintenance")
 
 if st.sidebar.button("🧹 Reset System & Workers", width="stretch"):
@@ -1075,7 +1094,7 @@ components.html(ARENA_HTML, height=590)
 st.caption("Shared Edge AI Compute • RADS Dynamic Scheduling • Multi-Worker Fault Tolerance")
 
 # Top Telemetry Cards
-m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
+m_col1, m_col2, m_col3, m_col4, m_col5, m_col6, m_col7 = st.columns(7)
 
 if redis_ok:
     processed = int(r.get("stats:processed") or 0)
@@ -1087,14 +1106,18 @@ if redis_ok:
     crit_met = int(r.get("stats:critical_deadline_met") or 0)
     cdsr = round((crit_met / crit_total) * 100.0, 1) if crit_total > 0 else 100.0
     failovers = int(r.get("stats:failovers") or 0)
+    edge_fallbacks = int(r.get("stats:edge_fallbacks") or 0)
+    lakehouse_exports = int(r.get("stats:lakehouse_exports") or 0)
 else:
-    processed, q_depth, avg_lat, cdsr, failovers = 0, 0, 0.0, 100.0, 0
+    processed, q_depth, avg_lat, cdsr, failovers, edge_fallbacks, lakehouse_exports = 0, 0, 0.0, 100.0, 0, 0, 0
 
 m_col1.metric("Tasks Completed", f"{processed:,}")
 m_col2.metric("Queue Depth", q_depth, delta=f"{q_depth} waiting" if q_depth > 0 else "Clear", delta_color="inverse")
-m_col3.metric("Avg Inference Latency", f"{avg_lat} ms")
-m_col4.metric("Critical Deadline Success (CDSR)", f"{cdsr}%", delta="100% Target" if cdsr >= 95 else "Contention", delta_color="normal")
-m_col5.metric("Failover Recoveries", failovers, delta="Auto-Recovered" if failovers > 0 else "Stable")
+m_col3.metric("Avg Latency", f"{avg_lat} ms")
+m_col4.metric("Critical CDSR", f"{cdsr}%", delta="100% Target" if cdsr >= 95 else "Contention", delta_color="normal")
+m_col5.metric("Failovers", failovers, delta="Recovered" if failovers > 0 else "Stable")
+m_col6.metric("Edge Fallbacks", edge_fallbacks, delta=f"{edge_fallbacks} Protected" if edge_fallbacks > 0 else "Zero Misses", delta_color="normal")
+m_col7.metric("Lakehouse Exports", lakehouse_exports, delta="Snappy Batches")
 
 st.markdown("---")
 
@@ -1189,6 +1212,36 @@ with tab2:
     else:
         st.info("Autoscaler initialized. Click '📈 Trigger Fleet Surge' in the sidebar to observe live elastic scaling!")
 
+    st.markdown("#### 📅 Predictive Compute Provisioning (Upcoming Missions)")
+    st.caption("Shifted from reactive to proactive: pre-warms pods 30s ahead of announced high-intensity robot missions.")
+    if redis_ok:
+        active_missions = r.lrange("missions:active", 0, 9)
+        if active_missions:
+            m_rows = []
+            now_ts = time.time()
+            for m_str in active_missions:
+                try:
+                    m = json.loads(m_str)
+                    start_ts = m.get("start_time_epoch", now_ts)
+                    lead = max(0, int(start_ts - now_ts))
+                    status_lbl = "🟡 PRE-WARMING (30s Window)" if lead <= 30 and lead > 0 else ("🟢 ACTIVE SURGE" if lead == 0 else "⏳ SCHEDULED")
+                    m_rows.append({
+                        "Mission ID": m.get("mission_id"),
+                        "Fleet ID": m.get("fleet_id"),
+                        "Expected Tasks": m.get("expected_critical_tasks"),
+                        "Target Workers": m.get("target_prewarmed_workers"),
+                        "Lead Time": f"{lead}s",
+                        "Status": status_lbl
+                    })
+                except Exception:
+                    pass
+            if m_rows:
+                st.dataframe(pd.DataFrame(m_rows), width="stretch", hide_index=True)
+            else:
+                st.info("No upcoming missions announced yet.")
+        else:
+            st.info("No active or upcoming high-intensity missions registered. Proactive autoscaler is monitoring.")
+
 with tab3:
     st.subheader("🏢 Multi-Tenant Fleet Governance & SLA Compliance")
     st.markdown("Industrial Private Clouds partition compute across distinct robotic departments, enforcing per-fleet rate limits and latency SLAs.")
@@ -1241,6 +1294,55 @@ with tab4:
                 st.json({k: v for k, v in latest_inc.items() if k != "image_base64"})
     else:
         st.info("No safety hazard incidents logged yet. Triggering a critical collision hazard will automatically seal an incident record to S3.")
+
+    st.markdown("---")
+    st.subheader("📊 Data Lakehouse Parquet Exporter (Offline Analytics ETL)")
+    st.markdown("""
+    **Enterprise Columnar Lakehouse Ingestion:** Batch-processes high-velocity Redis time-series events, RADS scheduling metrics, 
+    and sealed MinIO ISO 3691-4 incident logs into compressed **Apache Parquet** columnar datasets. 
+    Parquet datasets are uploaded directly to the dedicated `robonexus-analytics` bucket (`s3://robonexus-analytics/`) for PySpark, DuckDB, and Trino analytics.
+    """)
+    
+    col_exp_btn, col_exp_spacer = st.columns([1, 2])
+    with col_exp_btn:
+        if st.button("⚡ Export Parquet Batch Now", width="stretch", type="primary"):
+            try:
+                import batch_exporter
+                new_meta = batch_exporter.export_fleet_telemetry_lakehouse(r)
+                st.success(f"Successfully exported {new_meta['row_count']} rows to {new_meta['file_name']}!")
+            except Exception as e:
+                st.error(f"Lakehouse export error: {e}")
+                
+    latest_exp_raw = r.get("lakehouse:latest_export") if redis_ok else None
+    if latest_exp_raw:
+        latest_exp = json.loads(latest_exp_raw)
+        p_col1, p_col2, p_col3, p_col4 = st.columns(4)
+        p_col1.metric("Latest Parquet Dataset", latest_exp.get("file_name", "-"))
+        p_col2.metric("Total Columnar Rows", f"{latest_exp.get('row_count', 0):,}")
+        p_col3.metric("Compressed Size", f"{(latest_exp.get('file_size_bytes', 0) / 1024):.1f} KB", delta="Snappy")
+        p_col4.metric("S3 Analytics Bucket", latest_exp.get("bucket", "robonexus-analytics"))
+        
+        st.markdown(f"**Target S3 Analytics URI:** `{latest_exp.get('s3_analytics_uri')}`")
+        
+        fpath = latest_exp.get("file_path")
+        if fpath and os.path.exists(fpath):
+            with st.expander("🔍 Preview Columnar Parquet Records (PyArrow / Pandas)", expanded=True):
+                try:
+                    df_parquet = pd.read_parquet(fpath)
+                    st.dataframe(df_parquet.head(20), width="stretch", hide_index=True)
+                    
+                    with open(fpath, "rb") as f_pq:
+                        pq_bytes = f_pq.read()
+                    st.download_button(
+                        label="📥 Download .parquet File",
+                        data=pq_bytes,
+                        file_name=latest_exp.get("file_name", "fleet_analytics.parquet"),
+                        mime="application/octet-stream"
+                    )
+                except Exception as e:
+                    st.warning(f"Could not load parquet preview: {e}")
+    else:
+        st.info("No Parquet export generated yet. Click '⚡ Export Parquet Batch Now' above to run the batch ETL pipeline.")
 
 with tab5:
     st.subheader("📈 Performance Benchmarks & Live Vision Audit")

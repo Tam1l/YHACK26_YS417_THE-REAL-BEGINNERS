@@ -12,3 +12,6 @@ storage/incidents/*.json
 !storage/incidents/.gitkeep
 data_lakehouse/*.parquet
 !data_lakehouse/.gitkeep
+storage/analytics/**/*.parquet
+storage/analytics/*.parquet
+!storage/analytics/.gitkeep
