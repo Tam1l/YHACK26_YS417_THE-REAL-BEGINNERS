@@ -912,17 +912,40 @@ function drawTelemetryUplink(light, isStopped) {
     ctx.stroke();
     ctx.setLineDash([]);
     
-    // Transmission carrier label
+    // Transmission carrier label (disappears when reaching rack boxes so words never interfere)
     const midX = (agv.x + hubX) / 2;
     const midY = (agv.y + hubY) / 2 - 10;
-    if (isStopped) {
-        ctx.fillStyle = '#ef4444';
-        ctx.font = 'bold 10.5px sans-serif';
-        ctx.fillText("🚨 5G Telemetry Uplink [POST /api/v1/cloud/hazard {dist: 0.95m}]", midX - 145, midY);
-    } else {
-        ctx.fillStyle = 'rgba(14, 165, 233, 0.9)';
-        ctx.font = '600 10px sans-serif';
-        ctx.fillText("📡 5G Telemetry Uplink (Normal 4ms)", midX - 70, midY);
+    const w = canvas.width;
+    const textHalfW = isStopped ? 150 : 80;
+    const textLeft = midX - textHalfW;
+    const textRight = midX + textHalfW;
+    const textTop = midY - 14;
+    const textBottom = midY + 6;
+
+    const obstacles = [
+        { x: 24, y: 128, w: 240, h: 60 },                         // RACK-A
+        { x: w - 264, y: 128, w: 240, h: 60 },                     // RACK-B
+        { x: 24, y: 414, w: 240, h: 60 },                         // RACK-C
+        { x: Math.max(290, Math.floor((w - 240) / 2)), y: 414, w: 240, h: 60 }, // RACK-D
+        { x: w - 216, y: 12, w: 192, h: 80 },                      // Cloud Hub HUD
+        { x: Math.max(260, Math.floor((w - 180) / 2)), y: 14, w: 180, h: 92 }  // Autonomous Dock
+    ];
+
+    const collidesWithRack = obstacles.some(box => 
+        textRight >= box.x - 10 && textLeft <= box.x + box.w + 10 &&
+        textBottom >= box.y - 10 && textTop <= box.y + box.h + 10
+    );
+
+    if (!collidesWithRack) {
+        if (isStopped) {
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 10.5px sans-serif';
+            ctx.fillText("🚨 5G Telemetry Uplink [POST /api/v1/cloud/hazard {dist: 0.95m}]", midX - 145, midY);
+        } else {
+            ctx.fillStyle = 'rgba(14, 165, 233, 0.9)';
+            ctx.font = '600 10px sans-serif';
+            ctx.fillText("📡 5G Telemetry Uplink (Normal 4ms)", midX - 70, midY);
+        }
     }
 
     // Dynamic data packets
