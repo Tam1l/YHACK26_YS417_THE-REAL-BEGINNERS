@@ -1,0 +1,10 @@
+venv/
+redis_bin/
+redis-server.zip
+redis_log.txt
+__pycache__/
+*.pyc
+generate_files.py
+patch_failsafe.py
+patch_redis.py
+YHACK26_YS417_THE-REAL-BEGINNERS/
