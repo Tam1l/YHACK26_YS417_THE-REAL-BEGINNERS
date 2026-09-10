@@ -1134,15 +1134,16 @@ body {
 .panel-help { color: var(--text-secondary); font-size: 11px; line-height: 1.5; padding: 9px 10px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-subtle); }
 .panel-divider { height: 1px; background: var(--border-subtle); margin: 6px 0; }
 
-/* Main CTA panel button — taller, more commanding */
+/* Main CTA panel button — thick, commanding dispatch button */
 .panel-button {
     width: 100%;
     justify-content: center;
-    height: 42px;
-    font-size: 13px;
+    height: 52px;
+    padding: 0 20px;
+    font-size: 13.5px;
     font-weight: 700;
-    letter-spacing: 0.2px;
-    border-radius: 10px;
+    letter-spacing: 0.25px;
+    border-radius: 11px;
 }
 
 /* Two-button side-by-side row */
