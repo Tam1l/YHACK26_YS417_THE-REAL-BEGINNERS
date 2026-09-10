@@ -275,32 +275,40 @@ function drawCloudHubHUD(w, light) {
 function drawCameraHUD(w, light) {
     const hudW = 210, hudH = 135;
     const hudX = w - hudW - 16, hudY = canvas.height - hudH - 16;
+    const isStopped = (agv.status === 'STOPPED');
 
     ctx.fillStyle = light ? '#ffffff' : '#0f172a';
     ctx.fillRect(hudX, hudY, hudW, hudH);
-    ctx.strokeStyle = light ? '#cbd5e1' : '#1e293b';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = isStopped ? '#ef4444' : (light ? '#cbd5e1' : '#1e293b');
+    ctx.lineWidth = isStopped ? 2.5 : 1.5;
     ctx.strokeRect(hudX, hudY, hudW, hudH);
 
-    ctx.fillStyle = light ? '#0891b2' : '#22d3ee';
+    ctx.fillStyle = isStopped ? '#ef4444' : (light ? '#0891b2' : '#22d3ee');
     ctx.font = 'bold 10px sans-serif';
-    ctx.fillText("👁️ AGV-01 PERCEPTION STREAM", hudX + 10, hudY + 18);
+    ctx.fillText(isStopped ? "🚨 AGV-01 TELEMETRY FEED" : "👁️ AGV-01 PERCEPTION STREAM", hudX + 10, hudY + 18);
 
     // Bounding box viewfinder
     ctx.fillStyle = light ? '#f1f5f9' : '#000000';
     ctx.fillRect(hudX + 8, hudY + 26, hudW - 16, 78);
 
-    ctx.strokeStyle = agv.status === 'STOPPED' ? '#ef4444' : '#10b981';
+    ctx.strokeStyle = isStopped ? '#ef4444' : '#10b981';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(hudX + 35, hudY + 36, 120, 56);
 
-    ctx.fillStyle = agv.status === 'STOPPED' ? '#ef4444' : '#10b981';
+    ctx.fillStyle = isStopped ? '#ef4444' : '#10b981';
     ctx.font = 'bold 9px monospace';
-    ctx.fillText(agv.status === 'STOPPED' ? 'TARGET: HUMAN (98%)' : 'TARGET: CLEAR (94%)', hudX + 40, hudY + 50);
+    ctx.fillText(isStopped ? 'TARGET: HUMAN (98%)' : 'TARGET: CLEAR (94%)', hudX + 40, hudY + 50);
 
-    ctx.fillStyle = light ? '#64748b' : '#94a3b8';
-    ctx.font = '10px monospace';
-    ctx.fillText(`LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`, hudX + 10, hudY + 122);
+    if (isStopped) {
+        ctx.fillStyle = '#dc2626';
+        ctx.font = 'bold 8.5px monospace';
+        ctx.fillText('STATUS: SAFETY STOPPED', hudX + 40, hudY + 66);
+        ctx.fillText('PROXIMITY: 85 cm [ZONE-1]', hudX + 40, hudY + 79);
+    }
+
+    ctx.fillStyle = isStopped ? '#dc2626' : (light ? '#64748b' : '#94a3b8');
+    ctx.font = isStopped ? 'bold 9px monospace' : '10px monospace';
+    ctx.fillText(isStopped ? "TELEMETRY: RED [URLLC SLICE]" : `LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`, hudX + 10, hudY + 122);
 }
 
 // ================= SIMULATION PHYSICS & UPDATE =================
@@ -340,8 +348,9 @@ function updateSimulation() {
     if (sweeper.x > 460) sweeper.dir = -1;
     if (sweeper.x < 240) sweeper.dir = 1;
 
-    // Periodic telemetry packets
-    if (Math.random() < 0.08) {
+    // Periodic telemetry packets (more rapid when emergency brake is engaged)
+    const packetFreq = (agv.status === 'STOPPED') ? 0.18 : 0.08;
+    if (Math.random() < packetFreq) {
         const hubX = canvas.width - 120;
         packets.push({
             fromX: agv.x,
@@ -354,7 +363,7 @@ function updateSimulation() {
     }
 
     // Advance packets
-    packets.forEach(p => { p.progress += 0.04; });
+    packets.forEach(p => { p.progress += (agv.status === 'STOPPED' ? 0.05 : 0.04); });
     packets = packets.filter(p => p.progress < 1.0);
 }
 
@@ -382,13 +391,36 @@ function render() {
     ctx.strokeRect(agv.x - 22, agv.y - 15, 44, 30);
 
     // LiDAR Safety Beam Cone
-    ctx.fillStyle = agv.status === 'STOPPED' ? 'rgba(220, 38, 38, 0.22)' : 'rgba(217, 119, 6, 0.18)';
-    ctx.beginPath();
-    ctx.moveTo(agv.x + 22, agv.y);
-    ctx.lineTo(agv.x + 110, agv.y - 38);
-    ctx.lineTo(agv.x + 110, agv.y + 38);
-    ctx.closePath();
-    ctx.fill();
+    if (isStopped) {
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.28)';
+        ctx.beginPath();
+        ctx.moveTo(agv.x + 22, agv.y);
+        ctx.lineTo(agv.x + 115, agv.y - 42);
+        ctx.lineTo(agv.x + 115, agv.y + 42);
+        ctx.closePath();
+        ctx.fill();
+
+        // Pulsing danger warning arcs
+        const pulseR = 30 + (Date.now() % 900) / 900 * 50;
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(agv.x + 22, agv.y, pulseR, -Math.PI / 4, Math.PI / 4);
+        ctx.stroke();
+
+        // Red halo ring around AGV
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(agv.x - 25, agv.y - 18, 50, 36);
+    } else {
+        ctx.fillStyle = 'rgba(217, 119, 6, 0.18)';
+        ctx.beginPath();
+        ctx.moveTo(agv.x + 22, agv.y);
+        ctx.lineTo(agv.x + 110, agv.y - 38);
+        ctx.lineTo(agv.x + 110, agv.y + 38);
+        ctx.closePath();
+        ctx.fill();
+    }
 
     // AGV Label
     ctx.fillStyle = '#ffffff';
@@ -421,10 +453,10 @@ function render() {
     const hubY = 60;
     
     ctx.save();
-    // Subtle dashed wireless transmission line
-    ctx.strokeStyle = agv.status === 'STOPPED' ? 'rgba(239, 68, 68, 0.28)' : 'rgba(56, 189, 248, 0.25)';
-    ctx.setLineDash([4, 6]);
-    ctx.lineWidth = 1.5;
+    // Dashed wireless transmission line - bright red and prominent during emergency stop
+    ctx.strokeStyle = isStopped ? 'rgba(239, 68, 68, 0.85)' : 'rgba(56, 189, 248, 0.28)';
+    ctx.setLineDash(isStopped ? [6, 4] : [4, 6]);
+    ctx.lineWidth = isStopped ? 2.5 : 1.5;
     ctx.beginPath();
     ctx.moveTo(agv.x, agv.y);
     ctx.lineTo(hubX, hubY);
@@ -434,21 +466,85 @@ function render() {
     // Transmission carrier label
     const midX = (agv.x + hubX) / 2;
     const midY = (agv.y + hubY) / 2 - 8;
-    ctx.fillStyle = agv.status === 'STOPPED' ? 'rgba(239, 68, 68, 0.85)' : 'rgba(14, 165, 233, 0.85)';
-    ctx.font = '600 10px sans-serif';
-    ctx.fillText("📡 5G Telemetry Uplink (4ms)", midX - 60, midY);
+    if (isStopped) {
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText("🚨 5G Telemetry [EMERGENCY BRAKE ACTIVE - RED]", midX - 110, midY);
+    } else {
+        ctx.fillStyle = 'rgba(14, 165, 233, 0.85)';
+        ctx.font = '600 10px sans-serif';
+        ctx.fillText("📡 5G Telemetry Uplink (4ms)", midX - 60, midY);
+    }
 
-    // Dynamic data packets
+    // Dynamic data packets - glowing red during emergency stop
     packets.forEach(p => {
         const curX = p.fromX + (p.toX - p.fromX) * p.progress;
         const curY = p.fromY + (p.toY - p.fromY) * p.progress;
         ctx.fillStyle = p.color;
         ctx.shadowColor = p.color;
-        ctx.shadowBlur = 6;
-        ctx.beginPath(); ctx.arc(curX, curY, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = isStopped ? 12 : 6;
+        ctx.beginPath(); ctx.arc(curX, curY, isStopped ? 5.5 : 4, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
     });
     ctx.restore();
+
+    // If emergency stopped, render rich Live Telemetry Callout directly on the floor
+    if (isStopped) {
+        const boxW = 275;
+        const boxH = 98;
+        let boxX = agv.x - 30;
+        if (boxX + boxW > canvas.width - 20) boxX = canvas.width - boxW - 20;
+        if (boxX < 15) boxX = 15;
+        const boxY = Math.max(16, agv.y - 128);
+
+        ctx.save();
+        // Dashed leader pointer to AGV
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(agv.x, agv.y - 16);
+        ctx.lineTo(boxX + 35, boxY + boxH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Card body shadow & fill
+        ctx.shadowColor = 'rgba(239, 68, 68, 0.4)';
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = light ? '#ffffff' : '#0f172a';
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+        ctx.shadowBlur = 0;
+
+        // Border
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+        // Crimson Header Bar
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(boxX, boxY, boxW, 23);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10.5px sans-serif';
+        ctx.fillText("🚨 5G TELEMETRY [EMERGENCY HALT]", boxX + 10, boxY + 16);
+
+        // Telemetry Details
+        ctx.fillStyle = light ? '#0f172a' : '#f8fafc';
+        ctx.font = 'bold 9.5px monospace';
+        ctx.fillText("• STATUS    : EMERGENCY BRAKE ACTIVE (RED)", boxX + 10, boxY + 39);
+
+        ctx.fillStyle = '#dc2626';
+        ctx.fillText("• PROXIMITY : 85 cm [HUMAN IN PATH]", boxX + 10, boxY + 53);
+
+        ctx.fillStyle = light ? '#334155' : '#cbd5e1';
+        ctx.font = '9.5px monospace';
+        ctx.fillText("• VELOCITY  : 0.00 m/s (Braking dist: 12.4cm)", boxX + 10, boxY + 67);
+
+        ctx.fillStyle = '#0284c7';
+        ctx.font = 'bold 9.5px monospace';
+        ctx.fillText("• BLACK-BOX : S3 ISO 3691-4 Record Sealed", boxX + 10, boxY + 83);
+
+        ctx.restore();
+    }
 }
 
 function gameLoop() {
@@ -997,45 +1093,64 @@ document.getElementById('btnRefreshFeed')?.addEventListener('click', async () =>
 });
 
 // ================= AUTO-NAVIGATE & CENTER ON TAB =================
-function navigateToTab(tabId, targetSelector = null, pulse = true) {
-    // 1. Activate matching tab button
-    document.querySelectorAll('.tab-btn').forEach(b => {
-        if (b.getAttribute('data-tab') === tabId) {
-            b.classList.add('active');
-        } else {
-            b.classList.remove('active');
-        }
-    });
+let navigationTimer = null;
 
-    // 2. Activate matching tab panel
-    document.querySelectorAll('.tab-panel').forEach(p => {
-        if (p.id === tabId) {
-            p.classList.add('active');
-        } else {
-            p.classList.remove('active');
-        }
-    });
+function navigateToTab(tabId, targetSelector = null, pulse = true, delayMs = 0, onComplete = null) {
+    if (navigationTimer) {
+        clearTimeout(navigationTimer);
+        navigationTimer = null;
+    }
 
-    // 3. Smoothly center the element or tab in the viewport
-    const targetEl = targetSelector ? document.querySelector(targetSelector) : document.getElementById(tabId);
-    const scrollTarget = targetEl || document.getElementById(tabId);
-
-    if (scrollTarget) {
-        setTimeout(() => {
-            scrollTarget.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center'
-            });
-
-            if (pulse) {
-                scrollTarget.classList.remove('tab-focus-pulse');
-                void scrollTarget.offsetWidth; // Force CSS reflow
-                scrollTarget.classList.add('tab-focus-pulse');
-                setTimeout(() => {
-                    scrollTarget.classList.remove('tab-focus-pulse');
-                }, 2400);
+    const executeNavigation = () => {
+        // 1. Activate matching tab button
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            if (b.getAttribute('data-tab') === tabId) {
+                b.classList.add('active');
+            } else {
+                b.classList.remove('active');
             }
-        }, 100);
+        });
+
+        // 2. Activate matching tab panel
+        document.querySelectorAll('.tab-panel').forEach(p => {
+            if (p.id === tabId) {
+                p.classList.add('active');
+            } else {
+                p.classList.remove('active');
+            }
+        });
+
+        // 3. Smoothly center the element or tab in the viewport
+        const targetEl = targetSelector ? document.querySelector(targetSelector) : document.getElementById(tabId);
+        const scrollTarget = targetEl || document.getElementById(tabId);
+
+        if (scrollTarget) {
+            setTimeout(() => {
+                scrollTarget.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+
+                if (pulse) {
+                    scrollTarget.classList.remove('tab-focus-pulse');
+                    void scrollTarget.offsetWidth; // Force CSS reflow
+                    scrollTarget.classList.add('tab-focus-pulse');
+                    setTimeout(() => {
+                        scrollTarget.classList.remove('tab-focus-pulse');
+                    }, 2400);
+                }
+
+                if (onComplete && typeof onComplete === 'function') {
+                    onComplete();
+                }
+            }, 100);
+        }
+    };
+
+    if (delayMs > 0) {
+        navigationTimer = setTimeout(executeNavigation, delayMs);
+    } else {
+        executeNavigation();
     }
 }
 window.navigateToTab = navigateToTab;
@@ -1048,41 +1163,77 @@ document.getElementById('btnPlayPause').addEventListener('click', (e) => {
     showToast(isRunning ? "Fleet Simulation Resumed" : "Fleet Simulation Paused", "info");
 });
 
-// 2. Hazard Toggle (Navigates to Tab 4: S3 Incident Black-Box)
-document.getElementById('btnHazard').addEventListener('click', () => {
+// 2. Hazard Toggle (Paces visual stop first, then glides to Tab 4 logs)
+document.getElementById('btnHazard').addEventListener('click', async () => {
     humanHazard = !humanHazard;
     const btn = document.getElementById('btnHazard');
     if (humanHazard) {
         humanPos = { x: agv.x + 85, y: 265 };
+        agv.status = 'STOPPED';
+        agv.speed = 0;
         btn.innerHTML = '🟢 <span>CLEAR HAZARD</span> <span class="btn-tab-tag">Tab 4</span>';
-        showBanner("🚨 SAFETY CRITICAL: HUMAN OBSTACLE DETECTED IN AGV PATH! EMERGENCY BRAKE ACTIVE.", "rgba(220, 38, 38, 0.95)", "#ef4444");
-        showToast("Hazard Triggered: AGV emergency brake active! Auto-navigating to Tab 4 (S3 Incident Black-Box)...", "error", 4500);
-        navigateToTab('tabIncidents', '#incidentsTableBody');
+        
+        // 1. Immediately halt on floor, turn 5G telemetry line & packets RED, and display live details callout
+        showBanner("🚨 SAFETY CRITICAL: HUMAN OBSTACLE DETECTED! 5G TELEMETRY SWITCHED TO RED", "rgba(220, 38, 38, 0.95)", "#ef4444");
+        showToast("🚨 Obstacle detected at 85cm! AGV halted, 5G telemetry turned RED. Viewing floor telemetry details... gliding to S3 audit logs in 3s.", "error", 4500);
+
+        // 2. Immediately seal authentic ISO 3691-4 Black-Box incident in backend S3/Redis
+        let sealedIncident = null;
+        try {
+            const hRes = await fetch('/api/v1/cloud/hazard', { method: 'POST' });
+            if (hRes.ok) {
+                const hData = await hRes.json();
+                sealedIncident = hData.incident;
+                if (sealedIncident) {
+                    latestIncidentsCache = [sealedIncident, ...latestIncidentsCache.filter(i => i.incident_id !== sealedIncident.incident_id)];
+                    updateIncidentsTab(latestIncidentsCache);
+                }
+            }
+        } catch (err) {
+            console.warn("Hazard archive call error:", err);
+        }
+
+        // 3. Keep viewport at the top for 3.0s so viewer clearly sees the AGV stopping,
+        // the red 5G telemetry line and packets, and reads the on-floor Telemetry Callout box!
+        navigateToTab('tabIncidents', '#incidentsTableBody', true, 3000, () => {
+            const incId = sealedIncident?.incident_id || (latestIncidentsCache[0]?.incident_id);
+            if (incId) {
+                inspectIncident(incId);
+            }
+            showToast("🛡️ ISO 3691-4 Black-Box sealed into S3: Showing flight recorder audit trace.", "info", 4500);
+        });
     } else {
+        if (navigationTimer) {
+            clearTimeout(navigationTimer);
+            navigationTimer = null;
+        }
+        agv.status = 'NORMAL';
+        agv.speed = 2.4;
         btn.innerHTML = '🚨 <span>TRIGGER HAZARD (AGV-01)</span> <span class="btn-tab-tag">Tab 4</span>';
         showBanner("✅ PATH CLEAR: AGV RESUMING AUTONOMOUS TRANSIT", "rgba(16, 185, 129, 0.95)", "#10b981");
-        showToast("Hazard cleared. AGV resuming normal speed.", "success");
+        showToast("Hazard cleared. AGV resuming normal speed. Telemetry restored to normal.", "success");
     }
 });
 
-// 3. Batch Leapfrog (Navigates to Tab 5: Real-Time Execution Stream)
+// 3. Batch Leapfrog (Paced preemption demo)
 document.getElementById('btnBatchDemo').addEventListener('click', async () => {
     showBanner("📦 INJECTING 5x ROUTINE BATCH + 1 CRITICAL AGV LEAPFROG TASK...", "rgba(37, 99, 235, 0.95)", "#2563eb");
-    navigateToTab('tabBenchmarks', '#taskExecutionStreamBody');
+    
+    // Allow user to see the queue HUD register the burst, then scroll down to the stream
+    navigateToTab('tabBenchmarks', '#taskExecutionStreamBody', true, 1600);
     try {
         const res = await fetch('/api/v1/cloud/batch_leapfrog', { method: 'POST' });
         const data = await res.json();
-        showToast(`Preemption Verified! Critical AGV (RADS ${data.critical_rads_score}) pre-empted 5 queued tasks! Auto-navigated to Tab 5 (Execution Stream).`, "success", 5000);
+        showToast(`Preemption Verified! Critical AGV (RADS ${data.critical_rads_score}) pre-empted 5 queued tasks! Moving to Tab 5 (Execution Stream)...`, "success", 5000);
         showBanner(`⚡ PREEMPTION CONFIRMED: AGV-01 LEAPFROGGED 5 ROUTINE TASKS!`, "rgba(16, 185, 129, 0.95)", "#10b981");
     } catch (e) {
         showToast(`Batch Leapfrog error: ${e}`, "error");
     }
 });
 
-// 4. Kill Worker-1 / Restore Worker-1 (Navigates to Tab 1: Worker Fabric)
+// 4. Kill Worker-1 / Restore Worker-1 (Paced failover demo)
 document.getElementById('btnKillWorker').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
-    navigateToTab('tabFabric', '#workersListContainer');
     if (worker1Alive) {
         try {
             await fetch('/api/v1/debug/workers/worker-1/fail', { method: 'POST' });
@@ -1090,7 +1241,8 @@ document.getElementById('btnKillWorker').addEventListener('click', async (e) => 
             btn.innerHTML = '⚡ <span>RESTORE WORKER-1</span> <span class="btn-tab-tag">Tab 1</span>';
             btn.className = 'btn btn-emerald';
             showBanner("🔥 WORKER-1 CRASHED! ATOMIC FAILOVER REQUEUE ENGAGED.", "rgba(245, 158, 11, 0.95)", "#f59e0b");
-            showToast("Worker-1 killed! Centered on Tab 1 (Worker Pod Fabric) to observe instant peer failover!", "warning", 5000);
+            showToast("Worker-1 killed! Moving to Tab 1 (Worker Fabric) to observe instant peer failover...", "warning", 5000);
+            navigateToTab('tabFabric', '#workersListContainer', true, 1400);
         } catch (err) {
             showToast(`Fail error: ${err}`, "error");
         }
@@ -1102,6 +1254,7 @@ document.getElementById('btnKillWorker').addEventListener('click', async (e) => 
             btn.className = 'btn btn-warning';
             showBanner("⚡ WORKER-1 RESTORED & RE-JOINED COMPUTE CLUSTER.", "rgba(16, 185, 129, 0.95)", "#10b981");
             showToast("Worker-1 restored to cluster pool! Centered on Tab 1 (Worker Fabric).", "success");
+            navigateToTab('tabFabric', '#workersListContainer', true, 1000);
         } catch (err) {
             showToast(`Recover error: ${err}`, "error");
         }
@@ -1115,14 +1268,14 @@ window.toggleWorker = async function(wid, healthy) {
     showToast(`Worker ${wid} ${action === 'fail' ? 'killed' : 'recovered'} successfully.`, healthy ? "warning" : "success");
 };
 
-// 5. Fleet Surge (Navigates to Tab 2: Elastic Cloud Autoscaler)
+// 5. Fleet Surge (Paced autoscaler demo)
 document.getElementById('btnSurge').addEventListener('click', async () => {
     showBanner("📈 FLEET SURGE: INJECTING 10 RAPID TASKS TO TRIGGER KEDA AUTOSCALER...", "rgba(16, 185, 129, 0.95)", "#059669");
-    navigateToTab('tabAutoscaler', '#autoscalerLogContainer');
+    navigateToTab('tabAutoscaler', '#autoscalerLogContainer', true, 1400);
     try {
         const res = await fetch('/api/v1/cloud/surge', { method: 'POST' });
         const data = await res.json();
-        showToast("Fleet Surge Injected (10 tasks)! Centered on Tab 2 (Autoscaler) to watch pod provisioning in real-time!", "info", 5000);
+        showToast("Fleet Surge Injected (10 tasks)! Centering on Tab 2 (Autoscaler) to watch pod provisioning in real-time...", "info", 5000);
     } catch (e) {
         showToast(`Surge error: ${e}`, "error");
     }
@@ -1130,10 +1283,10 @@ document.getElementById('btnSurge').addEventListener('click', async () => {
 
 const DUMMY_BASE64_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
-// 6. Rogue Token (Navigates to Tab 3: Multi-Tenant Fleet Governance)
+// 6. Rogue Token (Paced security demo)
 document.getElementById('btnRogue').addEventListener('click', async () => {
     showBanner("🛡️ INGRESS GATEWAY: INJECTING UNAUTHORIZED ROGUE SPOOFED TOKEN...", "rgba(225, 29, 72, 0.95)", "#e11d48");
-    navigateToTab('tabTenants', '#tenantsListContainer');
+    navigateToTab('tabTenants', '#tenantsListContainer', true, 1400);
     try {
         const res = await fetch('/api/v1/inference', {
             method: 'POST',
@@ -1180,7 +1333,7 @@ document.getElementById('btnSystemReset').addEventListener('click', async () => 
     }
 });
 
-// 8. Custom Task Dispatch (Navigates to Tab 5: Live Perception Stream)
+// 8. Custom Task Dispatch (Paced perception demo)
 document.getElementById('deadlineSlider').addEventListener('input', (e) => {
     document.getElementById('deadlineDisplay').innerText = `${e.target.value}ms`;
 });
@@ -1217,8 +1370,8 @@ document.getElementById('btnDispatchTask').addEventListener('click', async () =>
     const crit = document.getElementById('critSelect').value;
     const dl = parseFloat(document.getElementById('deadlineSlider').value);
 
-    // Auto-navigate to Tab 5 to watch the live perception inference feed
-    navigateToTab('tabBenchmarks', '#visionFeedCanvas');
+    // Auto-navigate to Tab 5 after brief delay so user can see dispatch feedback
+    navigateToTab('tabBenchmarks', '#visionFeedCanvas', true, 1200);
 
     try {
         const res = await fetch('/api/v1/inference', {

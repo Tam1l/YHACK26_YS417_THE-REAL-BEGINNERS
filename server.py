@@ -385,6 +385,40 @@ def get_blackbox_incident(incident_id: str):
         raise HTTPException(status_code=404, detail="Incident not found")
     return rec
 
+@app.post("/api/v1/cloud/hazard")
+def trigger_hazard_incident(robot_id: str = "AGV-01", distance_cm: float = 85.0):
+    """
+    Simulates safety LiDAR hazard detection for AGV-01, halts transit,
+    and archives an ISO 3691-4 industrial incident record into S3.
+    """
+    details = {
+        "event": "SAFETY_ZONE_BREACH",
+        "human_proximity_cm": distance_cm,
+        "pre_brake_velocity_ms": 1.25,
+        "post_brake_velocity_ms": 0.0,
+        "stopping_distance_cm": 12.4,
+        "sensor": "LiDAR_Safety_Scanner_Zone1",
+        "worker": "worker-1",
+        "latency_ms": 14.2,
+        "deadline_met": True,
+        "telemetry_uplink": "5G-URLLC-SLICE-EMERGENCY [RED]",
+        "compliance_clause": "ISO 3691-4 §5.2.2.4 (Safety Audit Trail)",
+        "action_taken": "IMMEDIATE_CATEGORY_0_SAFETY_STOP"
+    }
+    s3_uri = incident_archiver.archive_incident(
+        robot_id=robot_id,
+        event_type="HUMAN_OBSTACLE_EMERGENCY_STOP",
+        criticality="CRITICAL",
+        details=details
+    )
+    latest = incident_archiver.list_recent_incidents(1)
+    rec = latest[0] if latest else {"incident_id": f"INC-SIM-{int(time.time())}", "s3_uri": s3_uri, "details": details}
+    return {
+        "status": "ARCHIVED",
+        "s3_uri": s3_uri,
+        "incident": rec
+    }
+
 @app.get("/api/v1/cloud/feed")
 def get_perception_feed_and_history():
     """Returns the latest completed camera frame and execution history for real-time audit."""
