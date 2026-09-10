@@ -222,89 +222,279 @@
 
             <!-- Tab 3: Multi-Tenant Fleets & SLA -->
             <div class="tab-panel" id="tabTenants">
-                <h3 style="font-size: 16px; font-weight: 700;">🏢 Multi-Tenant Fleet Governance & SLA Compliance</h3>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
-                    Private Cloud partitions compute across robotic departments, enforcing per-fleet rate limits, token authentication, and SLA latency targets.
-                </p>
-                <div class="tenants-grid" id="tenantsListContainer">
-                    <!-- Injected dynamically -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="font-size: 16px; font-weight: 700;">🏢 Multi-Tenant Fleet Governance & SLA Compliance</h3>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; max-width: 820px;">
+                            Industrial Private Cloud partitions compute across robotic departments, enforcing per-fleet rate limits, cryptographic tokens, and SLA latency targets to prevent noisy-neighbor starvation.
+                        </p>
+                    </div>
+                    <div class="compliance-badges-group">
+                        <span class="compliance-chip"><span class="chip-dot emerald"></span> 3 Fleets Partitioned</span>
+                        <span class="compliance-chip">🔑 Zero-Trust Auth</span>
+                        <span class="compliance-chip">⚡ Token Bucket Limiter</span>
+                    </div>
+                </div>
+
+                <!-- Dynamically populated tenant cards -->
+                <div class="tenants-grid" id="tenantsListContainer"></div>
+
+                <!-- Ingress Access Policy & Quota Matrix -->
+                <div style="margin-top: 24px;">
+                    <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">📋 Ingress Access Control & Rate-Limiting Policy Matrix</h4>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Tenant ID</th>
+                                    <th>Fleet Scope</th>
+                                    <th>Tier</th>
+                                    <th>Auth Header Requirement</th>
+                                    <th>Target SLA</th>
+                                    <th>Rate Limit</th>
+                                    <th>Burst Capacity</th>
+                                    <th>Throttling Policy</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>FLEET-AGV-LOGISTICS</code></td>
+                                    <td><b>Warehouse AGV Transport</b></td>
+                                    <td><span class="badge-tier critical">MISSION_CRITICAL</span></td>
+                                    <td><span class="code-pill">X-Fleet-Tenant + agv-token</span></td>
+                                    <td><b>&le; 100 ms</b></td>
+                                    <td>100 req/s</td>
+                                    <td>200 reqs</td>
+                                    <td><span style="color: var(--color-emerald); font-weight: 600;">Priority ZSET Leapfrog</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>FLEET-DRONE-PATROL</code></td>
+                                    <td><b>Airborne Facility Drone</b></td>
+                                    <td><span class="badge-tier operational">OPERATIONAL</span></td>
+                                    <td><span class="code-pill">X-Fleet-Tenant + drone-token</span></td>
+                                    <td><b>&le; 250 ms</b></td>
+                                    <td>25 req/s</td>
+                                    <td>50 reqs</td>
+                                    <td><span style="color: var(--color-blue); font-weight: 600;">Adaptive Queueing</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>FLEET-SWEEPER-INVENTORY</code></td>
+                                    <td><b>Cleaning & Inventory</b></td>
+                                    <td><span class="badge-tier best-effort">BEST_EFFORT</span></td>
+                                    <td><span class="code-pill">X-Fleet-Tenant + sweeper-token</span></td>
+                                    <td><b>&le; 800 ms</b></td>
+                                    <td>10 req/s</td>
+                                    <td>20 reqs</td>
+                                    <td><span style="color: var(--text-muted); font-weight: 600;">HTTP 429 Preemptible</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Interactive Ingress Security Tester -->
+                <div class="interactive-test-box" style="margin-top: 24px;">
+                    <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 6px;">🧪 Zero-Trust Ingress Security Simulator</h4>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+                        Simulate valid tenant requests vs spoofed rogue tokens to verify the gateway's cryptographic authorization headers.
+                    </p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                        <button class="btn btn-primary" id="btnTestAgvAuth" style="font-size: 12px; padding: 7px 14px;">
+                            ✅ Test AGV Authorized Ingress
+                        </button>
+                        <button class="btn btn-warning" id="btnTestDroneAuth" style="font-size: 12px; padding: 7px 14px;">
+                            🚁 Test Drone Ingress
+                        </button>
+                        <button class="btn btn-danger" id="btnTestRogueAuth" style="font-size: 12px; padding: 7px 14px;">
+                            🚫 Test Spoofed Rogue Token (403 Test)
+                        </button>
+                        <span id="txtIngressTestResult" class="code-pill" style="font-size: 12px; padding: 6px 12px; display: none;"></span>
+                    </div>
                 </div>
             </div>
 
             <!-- Tab 4: S3 Incident Archiver -->
             <div class="tab-panel" id="tabIncidents">
-                <h3 style="font-size: 16px; font-weight: 700;">🛡️ ISO 3691-4 Incident Black-Box & Compliance Archiver</h3>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
-                    Safety-critical incidents (e.g. human in AGV path or worker node failure) trigger automatic cryptographic sealing of telemetry and sensor frames into S3-compatible storage (<code>s3://robonexus-incidents/</code>).
-                </p>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="font-size: 16px; font-weight: 700;">🛡️ ISO 3691-4 Incident Black-Box & Compliance Archiver</h3>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; max-width: 820px;">
+                            Safety-critical incidents (e.g. human in AGV path or worker node failure) trigger automatic cryptographic sealing of telemetry and sensor frames into S3-compatible storage (<code>s3://robonexus-incidents/</code>).
+                        </p>
+                    </div>
+                    <div class="compliance-badges-group">
+                        <span class="compliance-chip"><span class="chip-dot red"></span> WORM Sealed</span>
+                        <span class="compliance-chip">🗄️ s3://robonexus-incidents/</span>
+                        <span class="compliance-chip">📜 ISO 3691-4 §5.2.2.4</span>
+                        <span class="compliance-chip">🔒 SHA-256 HMAC</span>
+                    </div>
+                </div>
+
+                <!-- Incident Records Table -->
                 <div class="data-table-container">
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Incident ID</th>
-                                <th>Timestamp</th>
+                                <th>Timestamp (UTC)</th>
                                 <th>Robot</th>
                                 <th>Event Type</th>
                                 <th>Severity</th>
                                 <th>S3 URI</th>
                                 <th>Compliance Standard</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody id="incidentsTableBody">
-                            <!-- Injected dynamically -->
+                            <!-- Populated dynamically -->
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Interactive Black-Box Flight Recorder Inspector Panel -->
+                <div class="incident-inspector-panel" id="incidentInspectorPanel" style="margin-top: 20px; display: none;">
+                    <div class="inspector-header">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 16px;">🔍</span>
+                            <h4 style="font-size: 14px; font-weight: 700;" id="inspTitle">Incident Black-Box Snapshot</h4>
+                            <span class="badge-tier critical" id="inspSeverity">CRITICAL</span>
+                        </div>
+                        <button class="btn-icon" id="btnCloseInspector" title="Close Inspector" style="padding: 4px 8px; font-size: 12px;">✕</button>
+                    </div>
+                    <div class="inspector-body">
+                        <div class="inspector-telemetry-col">
+                            <h5 style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Flight Telemetry at Brake Event</h5>
+                            <div class="inspector-metrics-grid">
+                                <div class="metric-card" style="padding: 10px;">
+                                    <span class="metric-label">Robot ID</span>
+                                    <div class="metric-val" style="font-size: 14px;" id="inspRobot">-</div>
+                                </div>
+                                <div class="metric-card" style="padding: 10px;">
+                                    <span class="metric-label">Assigned Worker</span>
+                                    <div class="metric-val" style="font-size: 14px;" id="inspWorker">-</div>
+                                </div>
+                                <div class="metric-card" style="padding: 10px;">
+                                    <span class="metric-label">Inference Latency</span>
+                                    <div class="metric-val" style="font-size: 14px;" id="inspLatency">-</div>
+                                </div>
+                                <div class="metric-card" style="padding: 10px;">
+                                    <span class="metric-label">Deadline Met</span>
+                                    <div class="metric-val" style="font-size: 14px; color: var(--color-emerald);" id="inspDeadline">-</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 10px;">
+                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">S3 Object Path:</div>
+                                <code id="inspS3Uri" class="code-pill" style="display: block; word-break: break-all;">-</code>
+                            </div>
+                        </div>
+                        <div class="inspector-json-col">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <h5 style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Tamper-Proof S3 JSON Audit Record</h5>
+                                <button class="btn btn-secondary" id="btnCopyIncidentJson" style="font-size: 11px; padding: 4px 8px;">📋 Copy JSON</button>
+                            </div>
+                            <pre class="terminal-log" id="inspJsonView" style="max-height: 180px; font-size: 11px; margin: 0;"></pre>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Tab 5: Benchmarks & Vision Feed -->
             <div class="tab-panel" id="tabBenchmarks">
-                <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 14px;">📈 Empirical Performance Benchmarks (FIFO vs. RADS)</h3>
-                <div class="benchmarks-grid">
-                    <div class="bench-card">
-                        <h4 style="font-size: 14px; font-weight: 700;">🚨 Critical Deadline Satisfaction Rate (CDSR)</h4>
-                        <div class="bar-row">
-                            <div class="bar-label-group">
-                                <span>Standard FIFO</span>
-                                <span style="color: var(--color-red);">35.0%</span>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="font-size: 16px; font-weight: 700;">📊 Performance Benchmarks & Real-Time Computer Vision Audit</h3>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; max-width: 820px;">
+                            Empirical head-to-head comparison of standard FIFO vs RoboNexus RADS under live multi-robot contention, paired with live AI perception inference inspection.
+                        </p>
+                    </div>
+                    <div class="compliance-badges-group">
+                        <span class="compliance-chip"><span class="chip-dot emerald"></span> YOLOv8 Nano Edge</span>
+                        <span class="compliance-chip">⚡ 100% CDSR Guarantee</span>
+                        <span class="compliance-chip">⏱️ 31.8x P95 Reduction</span>
+                    </div>
+                </div>
+
+                <!-- Live AI Perception Feed + Real-Time Execution Log -->
+                <div class="vision-suite-grid">
+                    <!-- Left: Live Perception Canvas -->
+                    <div class="vision-feed-card">
+                        <div class="feed-header">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span class="live-indicator"></span>
+                                <h4 style="font-size: 14px; font-weight: 700;">👁️ Edge AI Perception Stream</h4>
                             </div>
-                            <div class="bar-track">
-                                <div class="bar-fill fifo" style="width: 35%;"></div>
+                            <span class="code-pill" id="feedModelBadge">YOLOv8 Nano • 30 FPS</span>
+                        </div>
+                        <div class="perception-canvas-box">
+                            <canvas id="visionFeedCanvas" width="480" height="300"></canvas>
+                            <div class="feed-overlay-hud" id="feedOverlayHud">
+                                <div class="hud-item">Robot: <b id="feedRobotId">AGV-01</b></div>
+                                <div class="hud-item">Latency: <b id="feedLatency">64.1 ms</b></div>
+                                <div class="hud-item">Deadline: <b id="feedDeadlineStatus" style="color: var(--color-emerald);">MET</b></div>
                             </div>
                         </div>
-                        <div class="bar-row">
-                            <div class="bar-label-group">
-                                <span>RoboNexus RADS (Ours)</span>
-                                <span style="color: var(--color-emerald);">100.0%</span>
+                        <div class="feed-footer">
+                            <div style="font-size: 11px; color: var(--text-secondary);">
+                                Detections: <b id="feedDetectionsCount">0 detected</b> | Active Worker: <b id="feedWorkerId">-</b>
                             </div>
-                            <div class="bar-track">
-                                <div class="bar-fill rads" style="width: 100%;"></div>
-                            </div>
+                            <button class="btn btn-secondary" id="btnRefreshFeed" style="font-size: 11px; padding: 4px 8px;">🔄 Snapshot</button>
                         </div>
-                        <div style="font-size: 11px; color: var(--text-muted);">Under heavy queue congestion, RADS preempts routine tasks for zero deadline misses.</div>
                     </div>
 
-                    <div class="bench-card">
-                        <h4 style="font-size: 14px; font-weight: 700;">⏱️ Critical P95 Latency under Congestion</h4>
-                        <div class="bar-row">
-                            <div class="bar-label-group">
-                                <span>Standard FIFO</span>
-                                <span style="color: var(--color-red);">780.0 ms</span>
-                            </div>
-                            <div class="bar-track">
-                                <div class="bar-fill fifo" style="width: 85%;"></div>
-                            </div>
+                    <!-- Right: Real-Time Execution Log Stream -->
+                    <div class="execution-stream-card">
+                        <div class="feed-header">
+                            <h4 style="font-size: 14px; font-weight: 700;">📋 Real-Time Task Execution Stream</h4>
+                            <span style="font-size: 11px; color: var(--text-muted);">Last 15 Tasks in Redis</span>
                         </div>
-                        <div class="bar-row">
-                            <div class="bar-label-group">
-                                <span>RoboNexus RADS (Ours)</span>
-                                <span style="color: var(--color-emerald);">24.5 ms</span>
-                            </div>
-                            <div class="bar-track">
-                                <div class="bar-fill rads" style="width: 12%;"></div>
-                            </div>
+                        <div class="data-table-container" style="max-height: 310px; overflow-y: auto; margin-top: 0;">
+                            <table class="data-table" style="font-size: 11px;">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Robot</th>
+                                        <th>Criticality</th>
+                                        <th>Worker</th>
+                                        <th>Latency</th>
+                                        <th>Deadline</th>
+                                        <th>RADS</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="taskExecutionStreamBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
                         </div>
-                        <div style="font-size: 11px; color: var(--text-muted);">31.8x reduction in critical latency during multi-robot contention surges.</div>
+                    </div>
+                </div>
+
+                <!-- Empirical Performance Benchmark Cards -->
+                <div style="margin-top: 26px;">
+                    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">📈 Empirical Benchmark Metrics (Standard FIFO vs. RoboNexus RADS)</h4>
+                    <div class="benchmarks-grid" id="benchmarkMetricsGrid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Scientific Comparison Matrix Table -->
+                <div style="margin-top: 24px;">
+                    <h4 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">🔬 Architectural Comparison Matrix & Formal Proof</h4>
+                    <div class="data-table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Evaluation Dimension</th>
+                                    <th>Standard FIFO Scheduler</th>
+                                    <th>RoboNexus RADS (Ours)</th>
+                                    <th>Speedup / Delta</th>
+                                    <th>Algorithmic Mechanism</th>
+                                    <th>Industrial Significance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="benchmarkMatrixBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

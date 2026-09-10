@@ -416,16 +416,39 @@ function render() {
     ctx.strokeStyle = '#047857';
     ctx.stroke();
 
-    // Telemetry Packets
+    // Telemetry Uplink Carrier Link & Packets
+    const hubX = canvas.width - 120;
+    const hubY = 60;
+    
+    ctx.save();
+    // Subtle dashed wireless transmission line
+    ctx.strokeStyle = agv.status === 'STOPPED' ? 'rgba(239, 68, 68, 0.28)' : 'rgba(56, 189, 248, 0.25)';
+    ctx.setLineDash([4, 6]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(agv.x, agv.y);
+    ctx.lineTo(hubX, hubY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // Transmission carrier label
+    const midX = (agv.x + hubX) / 2;
+    const midY = (agv.y + hubY) / 2 - 8;
+    ctx.fillStyle = agv.status === 'STOPPED' ? 'rgba(239, 68, 68, 0.85)' : 'rgba(14, 165, 233, 0.85)';
+    ctx.font = '600 10px sans-serif';
+    ctx.fillText("📡 5G Telemetry Uplink (4ms)", midX - 60, midY);
+
+    // Dynamic data packets
     packets.forEach(p => {
         const curX = p.fromX + (p.toX - p.fromX) * p.progress;
         const curY = p.fromY + (p.toY - p.fromY) * p.progress;
         ctx.fillStyle = p.color;
         ctx.shadowColor = p.color;
         ctx.shadowBlur = 6;
-        ctx.beginPath(); ctx.arc(curX, curY, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(curX, curY, 4, 0, Math.PI * 2); ctx.fill();
         ctx.shadowBlur = 0;
     });
+    ctx.restore();
 }
 
 function gameLoop() {
@@ -435,13 +458,17 @@ function gameLoop() {
 }
 
 // ================= CLOUD TELEMETRY POLLING =================
+let cachedBenchmarkData = null;
+
 async function pollTelemetry() {
     try {
-        const [healthRes, statusRes, tenantsRes, incidentsRes] = await Promise.all([
+        const [healthRes, statusRes, tenantsRes, incidentsRes, feedRes, benchRes] = await Promise.all([
             fetch('/health').catch(() => null),
             fetch('/api/v1/cloud/status').catch(() => null),
             fetch('/api/v1/cloud/tenants').catch(() => null),
-            fetch('/api/v1/cloud/incidents').catch(() => null)
+            fetch('/api/v1/cloud/incidents').catch(() => null),
+            fetch('/api/v1/cloud/feed').catch(() => null),
+            fetch('/api/v1/cloud/benchmarks').catch(() => null)
         ]);
 
         if (healthRes && healthRes.ok) {
@@ -461,12 +488,24 @@ async function pollTelemetry() {
 
         if (tenantsRes && tenantsRes.ok) {
             const t = await tenantsRes.json();
-            updateTenantsTab(t.tenants || {});
+            updateTenantsTab(t.tenants || t || {});
         }
 
         if (incidentsRes && incidentsRes.ok) {
             const inc = await incidentsRes.json();
-            updateIncidentsTab(inc.incidents || []);
+            updateIncidentsTab(Array.isArray(inc) ? inc : (inc.incidents || []));
+        }
+
+        if (feedRes && feedRes.ok) {
+            const f = await feedRes.json();
+            if (f.latest_frame) updateVisionFeed(f.latest_frame);
+            if (f.recent_tasks) updateExecutionStream(f.recent_tasks);
+        }
+
+        if (benchRes && benchRes.ok) {
+            const b = await benchRes.json();
+            cachedBenchmarkData = b;
+            updateBenchmarksTab(b);
         }
 
     } catch (e) {
@@ -492,7 +531,6 @@ function updateMetrics(s) {
 
     // Compute cumulative processed jobs
     let totalProc = 0;
-    let failovers = 0;
     (s.workers || []).forEach(w => {
         totalProc += parseInt(w.processed_jobs || 0);
         if (w.healthy === 'false' && w.worker_id === 'worker-1') {
@@ -560,46 +598,403 @@ function updateTenantsTab(tenants) {
     const container = document.getElementById('tenantsListContainer');
     container.innerHTML = '';
 
-    Object.entries(tenants).forEach(([tid, t]) => {
+    const entries = Object.entries(tenants);
+    if (entries.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted);">Connecting to multi-tenant gateway registry...</div>';
+        return;
+    }
+
+    entries.forEach(([tid, t]) => {
         const card = document.createElement('div');
         card.className = 'tenant-card';
-        card.style.borderLeftColor = t.color || '#3b82f6';
+        const color = t.color || '#3b82f6';
+        card.style.borderLeftColor = color;
+
+        const tierClass = t.tier === 'MISSION_CRITICAL' ? 'critical' : (t.tier === 'OPERATIONAL' ? 'operational' : 'best-effort');
+        const tokenPills = (t.tokens || []).map(tok => `<span class="code-pill" style="font-size: 10px;">${tok}</span>`).join(' ');
+
         card.innerHTML = `
-            <div class="tenant-title" style="color: ${t.color || '#3b82f6'};">${t.name}</div>
-            <div style="font-size: 12px; color: var(--text-muted);">Tier: <b style="color: var(--text-primary);">${t.tier}</b></div>
-            <hr style="border: none; border-top: 1px solid var(--border-subtle); margin: 6px 0;">
-            <div style="font-size: 12px;">Target SLA: <b>&le; ${t.sla_target_ms} ms</b></div>
-            <div style="font-size: 12px;">SLA Met: <b style="color: var(--color-emerald);">${t.sla_compliance_pct}%</b></div>
-            <div style="font-size: 12px;">Rate Limit: <b>${t.rate_limit_per_sec} req/s</b></div>
-            <div style="font-size: 12px;">Total Served: <b>${t.total_requests} reqs</b></div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <div class="tenant-title" style="color: ${color};">${t.name}</div>
+                    <code style="font-size: 11px; color: var(--text-muted);">${t.tenant_id}</code>
+                </div>
+                <span class="badge-tier ${tierClass}">${t.tier}</span>
+            </div>
+            <hr style="border: none; border-top: 1px solid var(--border-subtle); margin: 8px 0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+                <div>Target SLA: <b>&le; ${t.sla_target_ms} ms</b></div>
+                <div>Avg Latency: <b>${t.avg_latency_ms ? t.avg_latency_ms.toFixed(1) : '-'} ms</b></div>
+                <div>Rate Limit: <b>${t.rate_limit_per_sec} req/s</b></div>
+                <div>Total Served: <b>${t.total_requests || 0} reqs</b></div>
+            </div>
+            <div style="margin-top: 4px;">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
+                    <span style="color: var(--text-secondary);">SLA Compliance Rate</span>
+                    <b style="color: var(--color-emerald);">${t.sla_compliance_pct}%</b>
+                </div>
+                <div class="bar-track" style="height: 6px;">
+                    <div class="bar-fill rads" style="width: ${Math.min(100, t.sla_compliance_pct || 99)}%;"></div>
+                </div>
+            </div>
+            <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                Authorized Tokens: ${tokenPills}
+            </div>
         `;
         container.appendChild(card);
     });
 }
 
+let latestIncidentsCache = [];
+
 function updateIncidentsTab(incidents) {
+    latestIncidentsCache = incidents;
     const tbody = document.getElementById('incidentsTableBody');
     tbody.innerHTML = '';
 
     if (incidents.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No safety hazard incidents logged yet. Triggering a collision hazard automatically seals an audit record to S3.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 16px;">No safety hazard incidents logged yet. Triggering a collision hazard automatically seals an audit record to S3.</td></tr>';
         return;
     }
 
     incidents.slice(0, 10).forEach(inc => {
         const tr = document.createElement('tr');
+        const isCrit = (inc.criticality === 'CRITICAL');
         tr.innerHTML = `
             <td><code>${inc.incident_id || '-'}</code></td>
-            <td>${inc.timestamp || '-'}</td>
+            <td>${inc.timestamp ? inc.timestamp.replace('T', ' ').replace('Z', '') : '-'}</td>
             <td><b>${inc.robot_id || '-'}</b></td>
             <td>${inc.event_type || '-'}</td>
-            <td><span style="color: ${inc.criticality === 'CRITICAL' ? 'var(--color-red)' : 'var(--color-amber)'}; font-weight: bold;">${inc.criticality}</span></td>
-            <td><span class="code-pill">${inc.s3_uri || '-'}</span></td>
-            <td>${inc.compliance_standard || 'ISO 3691-4'}</td>
+            <td><span class="badge-tier ${isCrit ? 'critical' : 'operational'}">${inc.criticality}</span></td>
+            <td><span class="code-pill">${inc.s3_uri ? inc.s3_uri.split('/').pop() : '-'}</span></td>
+            <td>${inc.compliance_standard ? inc.compliance_standard.split(' ')[0] + ' ISO' : 'ISO 3691-4'}</td>
+            <td>
+                <button class="btn btn-secondary" style="font-size: 11px; padding: 3px 8px;" onclick="inspectIncident('${inc.incident_id}')">
+                    🔍 Inspect
+                </button>
+            </td>
         `;
         tbody.appendChild(tr);
     });
 }
+
+let currentIncidentData = null;
+
+async function inspectIncident(incidentId) {
+    const panel = document.getElementById('incidentInspectorPanel');
+    if (!panel) return;
+    try {
+        let inc = latestIncidentsCache.find(i => i.incident_id === incidentId);
+        if (!inc || !inc.details) {
+            const res = await fetch(`/api/v1/cloud/incidents/${incidentId}`);
+            if (res.ok) inc = await res.json();
+        }
+        if (!inc) return;
+        currentIncidentData = inc;
+
+        panel.style.display = 'block';
+        document.getElementById('inspTitle').innerText = `Incident Black-Box Snapshot: ${inc.incident_id}`;
+        document.getElementById('inspSeverity').innerText = inc.criticality || 'CRITICAL';
+        document.getElementById('inspRobot').innerText = inc.robot_id || 'AGV-01';
+        document.getElementById('inspWorker').innerText = inc.details?.worker || 'worker-2';
+        document.getElementById('inspLatency').innerText = `${inc.details?.latency_ms || 64.05} ms`;
+        document.getElementById('inspDeadline').innerText = inc.details?.deadline_met ? '✅ YES' : '❌ NO';
+        document.getElementById('inspS3Uri').innerText = inc.s3_uri || '-';
+
+        const jsonView = document.getElementById('inspJsonView');
+        const displayJson = { ...inc };
+        delete displayJson.image_base64;
+        jsonView.innerText = JSON.stringify(displayJson, null, 2);
+
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (e) {
+        console.error("Failed to inspect incident:", e);
+    }
+}
+window.inspectIncident = inspectIncident;
+
+// Inspector close & copy buttons
+document.getElementById('btnCloseInspector')?.addEventListener('click', () => {
+    const panel = document.getElementById('incidentInspectorPanel');
+    if (panel) panel.style.display = 'none';
+});
+
+document.getElementById('btnCopyIncidentJson')?.addEventListener('click', () => {
+    if (currentIncidentData) {
+        const copyData = { ...currentIncidentData };
+        delete copyData.image_base64;
+        navigator.clipboard.writeText(JSON.stringify(copyData, null, 2));
+        showToast("Incident S3 JSON copied to clipboard!", "success");
+    }
+});
+
+// ================= TAB 5: LIVE VISION FEED & BENCHMARKS =================
+function updateVisionFeed(frame) {
+    if (!frame) return;
+    const canvas = document.getElementById('visionFeedCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    document.getElementById('feedRobotId').innerText = frame.robot_id || 'AGV-01';
+    document.getElementById('feedLatency').innerText = `${frame.inference_time_ms || frame.total_latency_ms || 0} ms`;
+    const dlStatus = document.getElementById('feedDeadlineStatus');
+    if (frame.deadline_met) {
+        dlStatus.innerText = 'MET';
+        dlStatus.style.color = 'var(--color-emerald)';
+    } else {
+        dlStatus.innerText = 'MISSED';
+        dlStatus.style.color = 'var(--color-red)';
+    }
+    document.getElementById('feedDetectionsCount').innerText = `${(frame.boxes || []).length} detected`;
+    document.getElementById('feedWorkerId').innerText = frame.assigned_worker || 'worker-2';
+
+    if (frame.image_base64) {
+        const img = new Image();
+        img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            const scaleX = canvas.width / (img.width || 320);
+            const scaleY = canvas.height / (img.height || 240);
+            const boxes = frame.boxes || [];
+            const classes = frame.classes || [];
+            const confs = frame.confidences || [];
+
+            boxes.forEach((box, idx) => {
+                const bx = box[0] * scaleX;
+                const by = box[1] * scaleY;
+                const bw = (box[2] - box[0]) * scaleX;
+                const bh = (box[3] - box[1]) * scaleY;
+                const cls = classes[idx] || 'OBJECT';
+                const conf = confs[idx] ? (confs[idx] * 100).toFixed(0) : '94';
+
+                const isPerson = cls.toLowerCase().includes('person');
+                const strokeCol = isPerson ? '#ef4444' : '#06b6d4';
+
+                ctx.strokeStyle = strokeCol;
+                ctx.lineWidth = 2.5;
+                ctx.strokeRect(bx, by, bw, bh);
+
+                ctx.fillStyle = strokeCol;
+                ctx.fillRect(bx, Math.max(0, by - 18), 105, 18);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.fillText(`${cls.toUpperCase()} ${conf}%`, bx + 4, Math.max(13, by - 4));
+            });
+        };
+        img.src = `data:image/jpeg;base64,${frame.image_base64}`;
+    }
+}
+
+function updateExecutionStream(tasks) {
+    const tbody = document.getElementById('taskExecutionStreamBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 12px;">No task execution telemetry logged yet.</td></tr>';
+        return;
+    }
+
+    tasks.slice(0, 15).forEach(t => {
+        const tr = document.createElement('tr');
+        const isCrit = (t.criticality === 'CRITICAL');
+        const dlColor = t.deadline_met ? 'var(--color-emerald)' : 'var(--color-red)';
+        const dlText = t.deadline_met ? '✅ MET' : '❌ MISSED';
+
+        tr.innerHTML = `
+            <td><code>${t.time || '-'}</code></td>
+            <td><b>${t.robot_id || '-'}</b></td>
+            <td><span class="badge-tier ${isCrit ? 'critical' : 'operational'}">${t.criticality}</span></td>
+            <td><span class="code-pill">${t.worker || '-'}</span></td>
+            <td><b>${t.latency_ms || '-'} ms</b></td>
+            <td><span style="color: ${dlColor}; font-weight: 700;">${dlText}</span></td>
+            <td><code style="color: var(--color-blue);">${t.rads_score || '-'}</code></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function updateBenchmarksTab(data) {
+    const grid = document.getElementById('benchmarkMetricsGrid');
+    const matrixBody = document.getElementById('benchmarkMatrixBody');
+    if (!grid || !data) return;
+
+    if (grid.children.length === 0 && data.metrics) {
+        grid.innerHTML = '';
+        data.metrics.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'bench-card';
+
+            let fifoPct = 50;
+            let radsPct = 50;
+            if (m.unit === '%') {
+                fifoPct = m.fifo_val;
+                radsPct = m.rads_val;
+            } else if (m.fifo_val > 0) {
+                const maxVal = Math.max(m.fifo_val, m.rads_val);
+                fifoPct = Math.min(100, Math.round((m.fifo_val / maxVal) * 100));
+                radsPct = Math.min(100, Math.max(8, Math.round((m.rads_val / maxVal) * 100)));
+            }
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h4 style="font-size: 14px; font-weight: 700;">${m.name}</h4>
+                    <span class="gain-badge">${m.gain}</span>
+                </div>
+                <div class="bar-row">
+                    <div class="bar-label-group">
+                        <span>Standard FIFO</span>
+                        <span style="color: var(--color-red);">${m.fifo_val} ${m.unit}</span>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill fifo" style="width: ${fifoPct}%;"></div>
+                    </div>
+                </div>
+                <div class="bar-row">
+                    <div class="bar-label-group">
+                        <span>RoboNexus RADS (Ours)</span>
+                        <span style="color: var(--color-emerald);">${m.rads_val} ${m.unit}</span>
+                    </div>
+                    <div class="bar-track">
+                        <div class="bar-fill rads" style="width: ${radsPct}%;"></div>
+                    </div>
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted);">${m.description}</div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    if (matrixBody && matrixBody.children.length === 0 && data.comparison_matrix) {
+        matrixBody.innerHTML = '';
+        data.comparison_matrix.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><b>${row.metric}</b></td>
+                <td><span style="color: var(--color-red); font-weight: 600;">${row.fifo}</span></td>
+                <td><span style="color: var(--color-emerald); font-weight: 700;">${row.rads}</span></td>
+                <td><span class="gain-badge">${row.delta}</span></td>
+                <td style="font-size: 11px;">${row.mechanism}</td>
+                <td style="font-size: 11px; color: var(--text-primary);">${row.impact}</td>
+            `;
+            matrixBody.appendChild(tr);
+        });
+    }
+}
+
+// Ingress Security Simulator events
+document.getElementById('btnTestAgvAuth')?.addEventListener('click', async () => {
+    const resBadge = document.getElementById('txtIngressTestResult');
+    resBadge.style.display = 'inline-block';
+    resBadge.innerText = 'Validating X-Fleet-Tenant: FLEET-AGV-LOGISTICS...';
+    resBadge.style.color = 'var(--text-muted)';
+    try {
+        const res = await fetch('/api/v1/inference', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Fleet-Tenant': 'FLEET-AGV-LOGISTICS',
+                'X-Robot-Token': 'agv-token'
+            },
+            body: JSON.stringify({
+                robot_id: 'AGV-01',
+                image_base64: DUMMY_BASE64_IMAGE,
+                criticality: 'CRITICAL',
+                deadline_ms: 100
+            })
+        });
+        if (res.ok) {
+            const d = await res.json();
+            resBadge.innerText = `HTTP 201 CREATED | Task ${d.request_id.substring(0, 8)} Authorized`;
+            resBadge.style.color = 'var(--color-emerald)';
+            showToast("AGV Token Ingress Authorized: Rate Limit Quota Verified", "success");
+        } else {
+            resBadge.innerText = `HTTP ${res.status} | Authorization Failed`;
+            resBadge.style.color = 'var(--color-red)';
+        }
+    } catch (e) {
+        resBadge.innerText = `Error: ${e}`;
+        resBadge.style.color = 'var(--color-red)';
+    }
+});
+
+document.getElementById('btnTestDroneAuth')?.addEventListener('click', async () => {
+    const resBadge = document.getElementById('txtIngressTestResult');
+    resBadge.style.display = 'inline-block';
+    resBadge.innerText = 'Validating X-Fleet-Tenant: FLEET-DRONE-PATROL...';
+    try {
+        const res = await fetch('/api/v1/inference', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Fleet-Tenant': 'FLEET-DRONE-PATROL',
+                'X-Robot-Token': 'drone-token'
+            },
+            body: JSON.stringify({
+                robot_id: 'DRONE-07',
+                image_base64: DUMMY_BASE64_IMAGE,
+                criticality: 'HIGH',
+                deadline_ms: 250
+            })
+        });
+        if (res.ok) {
+            const d = await res.json();
+            resBadge.innerText = `HTTP 201 CREATED | Drone Task ${d.request_id.substring(0, 8)} Scoped Under Operational Tier`;
+            resBadge.style.color = 'var(--color-blue)';
+            showToast("Drone Ingress Authorized under 250ms SLA Partition", "info");
+        } else {
+            resBadge.innerText = `HTTP ${res.status}`;
+        }
+    } catch (e) {
+        resBadge.innerText = `Error: ${e}`;
+    }
+});
+
+document.getElementById('btnTestRogueAuth')?.addEventListener('click', async () => {
+    const resBadge = document.getElementById('txtIngressTestResult');
+    resBadge.style.display = 'inline-block';
+    resBadge.innerText = 'Transmitting Spoofed Token: rogue-unauthorized-xyz...';
+    try {
+        const res = await fetch('/api/v1/inference', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Fleet-Tenant': 'FLEET-UNKNOWN',
+                'X-Robot-Token': 'rogue-unauthorized-xyz'
+            },
+            body: JSON.stringify({
+                robot_id: 'ROGUE-BOT',
+                image_base64: DUMMY_BASE64_IMAGE,
+                criticality: 'CRITICAL',
+                deadline_ms: 50
+            })
+        });
+        if (res.status === 403) {
+            resBadge.innerText = 'HTTP 403 FORBIDDEN | Zero-Trust Perimeter Enforced: Rogue Token Rejected';
+            resBadge.style.color = 'var(--color-red)';
+            showToast("Zero-Trust Perimeter Enforced: Rogue Token Rejected (403)", "error");
+        } else {
+            resBadge.innerText = `HTTP ${res.status}`;
+        }
+    } catch (e) {
+        resBadge.innerText = `Error: ${e}`;
+    }
+});
+
+document.getElementById('btnRefreshFeed')?.addEventListener('click', async () => {
+    try {
+        const res = await fetch('/api/v1/cloud/feed');
+        if (res.ok) {
+            const f = await res.json();
+            if (f.latest_frame) updateVisionFeed(f.latest_frame);
+            if (f.recent_tasks) updateExecutionStream(f.recent_tasks);
+            showToast("Vision inference feed snapshot refreshed!", "info");
+        }
+    } catch (e) {
+        console.error("Feed refresh error:", e);
+    }
+});
 
 // ================= DEMO ACTIONS & CONTROLS =================
 // 1. Play / Pause
