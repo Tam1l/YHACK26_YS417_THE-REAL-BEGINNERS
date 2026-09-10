@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import json
 import base64
@@ -34,8 +34,11 @@ yolo_model = None
 try:
     from ultralytics import YOLO
     model_path = os.getenv("YOLO_MODEL_PATH", "yolov8n.pt")
-    yolo_model = YOLO(model_path)
-    print(f"[+] Loaded YOLOv8 Model: {model_path}")
+    if os.path.exists(model_path):
+        yolo_model = YOLO(model_path)
+        print(f"[+] Loaded YOLOv8 Model: {model_path}")
+    else:
+        print(f"[*] YOLO model file '{model_path}' not cached locally; using Native Edge Vision Engine")
 except Exception as e:
     print(f"[*] Native Edge Vision Engine active ({e})")
 
