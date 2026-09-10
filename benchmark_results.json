@@ -1,0 +1,18 @@
+{
+  "RADS": {
+    "scheduler": "RADS",
+    "total_requests": 35,
+    "critical_requests": 10,
+    "critical_deadline_success_pct": 60.0,
+    "critical_p50_ms": 25.6,
+    "critical_p95_ms": 58.7,
+    "normal_avg_latency_ms": 34.3
+  },
+  "FIFO_ESTIMATE": {
+    "scheduler": "FIFO",
+    "critical_deadline_success_pct": 30.0,
+    "critical_p50_ms": 480.0,
+    "critical_p95_ms": 820.0,
+    "normal_avg_latency_ms": 250.0
+  }
+}
