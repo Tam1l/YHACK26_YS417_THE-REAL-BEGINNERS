@@ -98,6 +98,7 @@ class InferenceSubmission(BaseModel):
     criticality: str = Field("NORMAL", description="Mission Criticality: CRITICAL, HIGH, NORMAL, LOW")
     deadline_ms: float = Field(500.0, ge=10.0, le=30000.0, description="Execution deadline in milliseconds")
     image_base64: str = Field(..., description="Base64-encoded JPEG/PNG image")
+    source: Optional[str] = Field(None, description="Origin of the frame, for example live_camera")
 
     @field_validator("image_base64")
     @classmethod
@@ -241,6 +242,7 @@ def submit_inference(request: InferenceSubmission, auth=Depends(verify_token)):
         "priority": str(priority_num),
         "deadline_ms": str(request.deadline_ms),
         "image_base64": request.image_base64,
+        "source": request.source or "api",
         "state": "queued",
         "rads_score": str(rads_val),
         "queue_score": str(queue_score),
@@ -363,6 +365,15 @@ def get_result(request_id: str, auth=Depends(verify_token)):
         "assigned_worker": data.get("assigned_worker", ""),
         "created_ts": data.get("created_ts"),
         "completed_ts": data.get("completed_ts"),
+        "perception": {
+            "action": data.get("perception_action", "PENDING"),
+            "severity": data.get("perception_severity", "NONE"),
+            "hazard_detected": data.get("hazard_detected") == "true",
+            "hazard_class": data.get("hazard_class", ""),
+            "hazard_confidence": float(data.get("hazard_confidence", 0.0)),
+            "hazard_zone": data.get("hazard_zone", "CLEAR"),
+            "reason": data.get("perception_reason", ""),
+        },
     }
     
     if state == "completed":
@@ -624,7 +635,11 @@ def get_perception_feed_and_history():
     latest_frame = None
     recent_tasks = []
 
-    for tid in recent_ids:
+    # Operator-selected camera frames take precedence over simulator traffic.
+    preferred_id = redis_client.get("vision:latest_task_id")
+    ordered_ids = ([preferred_id] if preferred_id else []) + [tid for tid in recent_ids if tid != preferred_id]
+
+    for tid in ordered_ids:
         tdata = redis_client.hgetall(f"task:{tid}")
         if not tdata:
             continue
@@ -666,7 +681,16 @@ def get_perception_feed_and_history():
                 "classes": classes,
                 "confidences": confidences,
                 "image_base64": tdata.get("image_base64"),
-                "assigned_worker": tdata.get("assigned_worker", "worker-1")
+                "assigned_worker": tdata.get("assigned_worker", "worker-1"),
+                "perception": {
+                    "action": tdata.get("perception_action", "PENDING"),
+                    "severity": tdata.get("perception_severity", "NONE"),
+                    "hazard_detected": tdata.get("hazard_detected") == "true",
+                    "hazard_class": tdata.get("hazard_class", ""),
+                    "hazard_confidence": float(tdata.get("hazard_confidence", 0.0)),
+                    "hazard_zone": tdata.get("hazard_zone", "CLEAR"),
+                    "reason": tdata.get("perception_reason", ""),
+                }
             }
 
     return {

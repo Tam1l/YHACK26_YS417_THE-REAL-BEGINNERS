@@ -2,6 +2,21 @@
    ROBONEXUS PRIVATE AI CLOUD — CLIENT LOGIC & SIMULATION ENGINE
    ========================================================================== */
 
+// --- Gateway routing ---
+// The same UI can be served by FastAPI on :8000/dashboard or by the
+// dedicated dashboard service on :8501.  In the latter case all API calls
+// go to the gateway explicitly.
+const gatewayOrigin = window.location.port === '8501'
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : '';
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+    if (typeof input === 'string' && input.startsWith('/')) {
+        return nativeFetch(`${gatewayOrigin}${input}`, init);
+    }
+    return nativeFetch(input, init);
+};
+
 // --- Global State ---
 let isRunning = true;
 let humanHazard = false;
@@ -10,6 +25,8 @@ let worker1Alive = true;
 let worker2Alive = true;
 let latestLatency = 17.8;
 let latestClusterData = null;
+let latestVisionFrame = null;
+let arenaVisionImage = null;
 
 // Telemetry packets in flight
 // Telemetry packets in flight
@@ -498,33 +515,65 @@ function drawCameraHUD(w, light) {
     ctx.font = 'bold 10px sans-serif';
     ctx.fillText(isStopped ? "🚨 AGV-01 TELEMETRY FEED" : "👁️ AGV-01 PERCEPTION STREAM", hudX + 10, hudY + 18);
 
-    // Bounding box viewfinder
+    // Bounding box viewfinder.  Once an operator uploads or captures a
+    // frame, this is the real YOLO image and its returned detections.
     ctx.fillStyle = light ? '#f1f5f9' : '#000000';
     ctx.fillRect(hudX + 8, hudY + 26, hudW - 16, 84);
 
-    ctx.strokeStyle = isStopped ? '#ef4444' : '#10b981';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(hudX + 38, hudY + 36, 126, 62);
-
-    ctx.fillStyle = isStopped ? '#ef4444' : '#10b981';
-    ctx.font = 'bold 9px monospace';
-    ctx.fillText(isStopped ? 'TARGET: HUMAN (98.4%)' : 'TARGET: CLEAR (99.2%)', hudX + 42, hudY + 50);
-
-    if (isStopped) {
-        ctx.fillStyle = '#dc2626';
-        ctx.font = 'bold 8.5px monospace';
-        ctx.fillText('STATUS: SAFETY STOPPED', hudX + 42, hudY + 68);
-        ctx.fillText('PROXIMITY: 85 cm [ZONE-1]', hudX + 42, hudY + 82);
+    const viewX = hudX + 8, viewY = hudY + 26, viewW = hudW - 16, viewH = 78;
+    const perception = latestVisionFrame?.perception || {};
+    const hasVision = arenaVisionImage?.complete && arenaVisionImage.naturalWidth > 0 && latestVisionFrame;
+    if (hasVision) {
+        const scale = Math.min(viewW / arenaVisionImage.naturalWidth, viewH / arenaVisionImage.naturalHeight);
+        const renderW = arenaVisionImage.naturalWidth * scale;
+        const renderH = arenaVisionImage.naturalHeight * scale;
+        const renderX = viewX + (viewW - renderW) / 2;
+        const renderY = viewY + (viewH - renderH) / 2;
+        ctx.drawImage(arenaVisionImage, renderX, renderY, renderW, renderH);
+        (latestVisionFrame.boxes || []).slice(0, 8).forEach((box, index) => {
+            const cls = (latestVisionFrame.classes || [])[index] || 'object';
+            const confidence = (latestVisionFrame.confidences || [])[index] || 0;
+            const red = cls.toLowerCase() === 'person' || perception.hazard_detected;
+            const color = red ? '#ef4444' : '#06b6d4';
+            const bx = renderX + box[0] * scale;
+            const by = renderY + box[1] * scale;
+            const bw = (box[2] - box[0]) * scale;
+            const bh = (box[3] - box[1]) * scale;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.4;
+            ctx.strokeRect(bx, by, bw, bh);
+            ctx.fillStyle = color;
+            ctx.font = 'bold 7px monospace';
+            ctx.fillText(`${cls.toUpperCase()} ${(confidence * 100).toFixed(0)}%`, bx + 2, Math.max(viewY + 8, by + 8));
+        });
+        ctx.fillStyle = perception.hazard_detected ? '#dc2626' : '#059669';
+        ctx.font = 'bold 8px monospace';
+        ctx.fillText(`YOLO: ${perception.action || 'CLEAR'}`, hudX + 10, hudY + 116);
     } else {
-        ctx.fillStyle = '#059669';
-        ctx.font = '8px monospace';
-        ctx.fillText('LANE-01: OBSTACLE FREE', hudX + 42, hudY + 68);
-        ctx.fillText('AUTO-TRANSIT: 2.4 m/s', hudX + 42, hudY + 82);
+        ctx.strokeStyle = isStopped ? '#ef4444' : '#10b981';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(hudX + 35, hudY + 36, 120, 56);
+
+        ctx.fillStyle = isStopped ? '#ef4444' : '#10b981';
+        ctx.font = 'bold 9px monospace';
+        ctx.fillText(isStopped ? 'TARGET: HUMAN (98%)' : 'AWAITING OPERATOR FRAME', hudX + 40, hudY + 50);
+
+        if (isStopped) {
+            ctx.fillStyle = '#dc2626';
+            ctx.font = 'bold 8.5px monospace';
+            ctx.fillText('STATUS: SAFETY STOPPED', hudX + 42, hudY + 68);
+            ctx.fillText('PROXIMITY: 85 cm [ZONE-1]', hudX + 42, hudY + 82);
+        } else {
+            ctx.fillStyle = '#059669';
+            ctx.font = '8px monospace';
+            ctx.fillText('LANE-01: OBSTACLE FREE', hudX + 42, hudY + 68);
+            ctx.fillText('AUTO-TRANSIT: 2.4 m/s', hudX + 42, hudY + 82);
+        }
     }
 
     ctx.fillStyle = isStopped ? '#dc2626' : (light ? '#64748b' : '#94a3b8');
-    ctx.font = isStopped ? 'bold 9px monospace' : '9.5px monospace';
-    ctx.fillText(isStopped ? "TELEMETRY: RED [URLLC SLICE]" : `LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`, hudX + 10, hudY + 130);
+    ctx.font = isStopped ? 'bold 9px monospace' : '10px monospace';
+    ctx.fillText(hasVision ? `LATENCY: ${latestLatency.toFixed(1)}ms [YOLO COMPLETE]` : (isStopped ? "TELEMETRY: RED [URLLC SLICE]" : `LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`), hudX + 10, hudY + 130);
 }
 
 // ================= SIMULATION PHYSICS & UPDATE =================
@@ -936,7 +985,10 @@ function drawTelemetryUplink(light, isStopped) {
         textBottom >= box.y - 10 && textTop <= box.y + box.h + 10
     );
 
-    if (!collidesWithRack) {
+    // Visible up until that point before RACK-B; disappears beyond that point
+    const beyondPoint = (textRight >= w - 280) || (textLeft <= 280) || collidesWithRack;
+
+    if (!beyondPoint) {
         if (isStopped) {
             ctx.fillStyle = '#ef4444';
             ctx.font = 'bold 10.5px sans-serif';
@@ -1092,6 +1144,24 @@ async function pollTelemetry() {
             fetch('/api/v1/cloud/benchmarks').catch(() => null)
         ]);
 
+        // Vision is safety-critical. Populate the operator frame before any
+        // optional metrics/widget renderer can fail and interrupt this cycle.
+        if (feedRes && feedRes.ok) {
+            const f = await feedRes.json();
+            if (f.latest_frame) {
+                if (f.latest_frame.inference_time_ms) {
+                    latestLatency = parseFloat(f.latest_frame.inference_time_ms);
+                } else if (f.latest_frame.total_latency_ms) {
+                    latestLatency = parseFloat(f.latest_frame.total_latency_ms);
+                }
+                updateVisionFeed(f.latest_frame);
+            }
+            if (f.recent_tasks && f.recent_tasks.length > 0) {
+                if (f.recent_tasks[0].latency_ms) latestLatency = parseFloat(f.recent_tasks[0].latency_ms);
+                updateExecutionStream(f.recent_tasks);
+            }
+        }
+
         if (healthRes && healthRes.ok) {
             const h = await healthRes.json();
             if (h && h.status) {
@@ -1131,24 +1201,6 @@ async function pollTelemetry() {
         if (incidentsRes && incidentsRes.ok) {
             const inc = await incidentsRes.json();
             updateIncidentsTab(Array.isArray(inc) ? inc : (inc.incidents || []));
-        }
-
-        if (feedRes && feedRes.ok) {
-            const f = await feedRes.json();
-            if (f.latest_frame) {
-                if (f.latest_frame.inference_time_ms) {
-                    latestLatency = parseFloat(f.latest_frame.inference_time_ms);
-                } else if (f.latest_frame.total_latency_ms) {
-                    latestLatency = parseFloat(f.latest_frame.total_latency_ms);
-                }
-                updateVisionFeed(f.latest_frame);
-            }
-            if (f.recent_tasks && f.recent_tasks.length > 0) {
-                if (f.recent_tasks[0].latency_ms) {
-                    latestLatency = parseFloat(f.recent_tasks[0].latency_ms);
-                }
-                updateExecutionStream(f.recent_tasks);
-            }
         }
 
         if (benchRes && benchRes.ok) {
@@ -1553,6 +1605,7 @@ document.getElementById('btnCopyIncidentJson')?.addEventListener('click', () => 
 // ================= TAB 5: LIVE VISION FEED & BENCHMARKS =================
 function updateVisionFeed(frame) {
     if (!frame) return;
+    latestVisionFrame = frame;
     const canvas = document.getElementById('visionFeedCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -1569,10 +1622,17 @@ function updateVisionFeed(frame) {
     }
     document.getElementById('feedDetectionsCount').innerText = `${(frame.boxes || []).length} detected`;
     document.getElementById('feedWorkerId').innerText = frame.assigned_worker || 'worker-2';
+    const actionStatus = document.getElementById('visionActionStatus');
+    if (actionStatus) {
+        const perception = frame.perception || {};
+        actionStatus.innerText = `Safety action: ${perception.action || 'CLEAR'}`;
+        actionStatus.style.color = perception.hazard_detected ? 'var(--color-red)' : 'var(--color-emerald)';
+    }
 
     if (frame.image_base64) {
         const img = new Image();
         img.onload = () => {
+            arenaVisionImage = img;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
@@ -1817,6 +1877,176 @@ document.getElementById('btnRefreshFeed')?.addEventListener('click', async () =>
         console.error("Feed refresh error:", e);
     }
 });
+
+// The browser opens a camera only after this explicit control is pressed.
+async function submitVisionPhoto(file, source) {
+    if (!file) return;
+    const actionStatus = document.getElementById('visionActionStatus');
+    if (actionStatus) {
+        actionStatus.innerText = 'Submitting image to YOLO worker…';
+        actionStatus.style.color = 'var(--color-blue)';
+    }
+    const sideStatus = document.getElementById('sideVisionStatus');
+    if (sideStatus) sideStatus.innerText = 'Submitting image to the YOLO worker…';
+    try {
+        const imageBase64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result).split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+        const response = await fetch('/api/v1/inference', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-Fleet-Tenant': 'FLEET-AGV-LOGISTICS', 'X-Robot-Token': 'agv-token'},
+            body: JSON.stringify({robot_id: 'AGV-01', image_base64: imageBase64, source, criticality: 'CRITICAL', deadline_ms: 250, task_type: 'object_detection'})
+        });
+        if (!response.ok) throw new Error(`gateway returned HTTP ${response.status}`);
+        const task = await response.json();
+        if (actionStatus) actionStatus.innerText = 'YOLO inference queued…';
+        const expiresAt = Date.now() + 15000;
+        while (Date.now() < expiresAt) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const resultResponse = await fetch(`/api/v1/inference/${task.request_id}/result`, {headers: {'X-Fleet-Tenant': 'FLEET-AGV-LOGISTICS', 'X-Robot-Token': 'agv-token'}});
+            if (!resultResponse.ok) continue;
+            const result = await resultResponse.json();
+            if (result.state === 'completed') {
+                await pollTelemetry();
+                showToast(`YOLO complete: ${result.perception.action}`, result.perception.hazard_detected ? 'error' : 'success');
+                if (sideStatus) sideStatus.innerText = `YOLO complete: ${result.perception.action}`;
+                return;
+            }
+            if (result.state === 'failed') throw new Error(result.error || 'worker failed');
+        }
+        throw new Error('worker did not finish within 15 seconds');
+    } catch (error) {
+        if (actionStatus) {
+            actionStatus.innerText = `YOLO error: ${error.message}`;
+            actionStatus.style.color = 'var(--color-red)';
+        }
+        if (sideStatus) sideStatus.innerText = `YOLO error: ${error.message}`;
+        showToast(`Vision submission failed: ${error.message}`, 'error');
+    }
+}
+
+let pendingVisionPhoto = null;
+function showSelectedOperatorImage(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        const image = document.getElementById('sideCapturedImage');
+        const card = document.getElementById('sideCapturedImageCard');
+        if (image && card) {
+            image.src = reader.result;
+            card.hidden = false;
+        }
+    };
+    reader.readAsDataURL(file);
+}
+function queueVisionPhoto(file, source) {
+    if (!file) return;
+    showSelectedOperatorImage(file);
+    const auto = document.getElementById('sideAutoYolo');
+    if (!auto || auto.checked) {
+        submitVisionPhoto(file, source);
+        return;
+    }
+    pendingVisionPhoto = { file, source };
+    document.getElementById('btnSideRunYolo').disabled = false;
+    document.getElementById('sideVisionStatus').innerText = 'Photo selected. Press Run Real YOLO Inference.';
+}
+
+document.getElementById('btnUploadVision')?.addEventListener('click', () => document.getElementById('visionImageUpload')?.click());
+document.getElementById('visionImageUpload')?.addEventListener('change', event => queueVisionPhoto(event.target.files?.[0], 'web_upload'));
+document.getElementById('visionCameraCapture')?.addEventListener('change', event => queueVisionPhoto(event.target.files?.[0], 'web_camera'));
+
+// Left dispatcher panel mirrors the top controls, so every legacy mission
+// operation remains available without sacrificing the NextGen canvas.
+function syncSideControl(sideId, mainId, eventName = 'change') {
+    const side = document.getElementById(sideId);
+    const main = document.getElementById(mainId);
+    side?.addEventListener(eventName, () => {
+        main.value = side.value;
+        main.dispatchEvent(new Event(eventName, { bubbles: true }));
+    });
+}
+syncSideControl('sidePresetSelect', 'presetSelect');
+syncSideControl('sideSceneSelect', 'sceneSelect');
+syncSideControl('sideCritSelect', 'critSelect');
+syncSideControl('sideDeadline', 'deadlineSlider', 'input');
+
+document.getElementById('sideDeadline')?.addEventListener('input', event => {
+    document.getElementById('sideDeadlineValue').innerText = `${event.target.value}ms`;
+});
+let activeCameraStream = null;
+function setSideVisionStatus(message, color = 'var(--color-blue)') {
+    const status = document.getElementById('sideVisionStatus');
+    if (status) {
+        status.innerText = message;
+        status.style.color = color;
+    }
+}
+function closeRobotCamera() {
+    activeCameraStream?.getTracks().forEach(track => track.stop());
+    activeCameraStream = null;
+    const video = document.getElementById('sideCameraVideo');
+    if (video) video.srcObject = null;
+    const preview = document.getElementById('sideCameraPreview');
+    preview.classList.remove('is-open');
+    preview.style.display = 'none';
+    preview.hidden = true;
+    document.getElementById('btnSideCamera').innerText = 'Open robot camera';
+}
+async function openRobotCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        setSideVisionStatus('This browser does not support direct camera access.', 'var(--color-red)');
+        return;
+    }
+    try {
+        activeCameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        });
+        const video = document.getElementById('sideCameraVideo');
+        video.srcObject = activeCameraStream;
+        await video.play();
+        const preview = document.getElementById('sideCameraPreview');
+        preview.hidden = false;
+        preview.style.display = 'block';
+        preview.classList.add('is-open');
+        document.getElementById('btnSideCamera').innerText = 'Camera is on';
+        setSideVisionStatus('Camera is on. Frame is local until Capture and run YOLO.', 'var(--color-emerald)');
+    } catch (error) {
+        setSideVisionStatus(`Camera permission failed: ${error.message}`, 'var(--color-red)');
+    }
+}
+document.getElementById('btnSideCamera')?.addEventListener('click', () => activeCameraStream ? closeRobotCamera() : openRobotCamera());
+document.getElementById('btnCloseCamera')?.addEventListener('click', closeRobotCamera);
+function captureRobotCameraFrame() {
+    const video = document.getElementById('sideCameraVideo');
+    if (!video?.videoWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+        if (blob) queueVisionPhoto(new File([blob], 'robot-camera.jpg', { type: 'image/jpeg' }), 'web_camera');
+    }, 'image/jpeg', 0.92);
+    closeRobotCamera();
+}
+document.getElementById('btnCaptureCamera')?.addEventListener('click', captureRobotCameraFrame);
+document.getElementById('btnCameraPreviewCapture')?.addEventListener('click', captureRobotCameraFrame);
+document.getElementById('btnOpenVisionCamera')?.addEventListener('click', () => document.getElementById('btnSideCamera')?.click());
+document.getElementById('btnSideUpload')?.addEventListener('click', () => document.getElementById('btnUploadVision')?.click());
+document.getElementById('btnSideDispatch')?.addEventListener('click', () => document.getElementById('btnDispatchTask')?.click());
+document.getElementById('btnSideReset')?.addEventListener('click', () => document.getElementById('btnSystemReset')?.click());
+document.getElementById('btnSideRunYolo')?.addEventListener('click', () => {
+    if (!pendingVisionPhoto) return;
+    const pending = pendingVisionPhoto;
+    pendingVisionPhoto = null;
+    document.getElementById('btnSideRunYolo').disabled = true;
+    submitVisionPhoto(pending.file, pending.source);
+});
+document.querySelectorAll('[data-side-tab]').forEach(button => button.addEventListener('click', () => navigateToTab(button.dataset.sideTab)));
 
 // ================= AUTO-NAVIGATE & CENTER ON TAB =================
 let navigationTimer = null;

@@ -3,6 +3,7 @@ import time
 import json
 import base64
 import io
+import hashlib
 import requests
 import redis
 import pandas as pd
@@ -231,13 +232,20 @@ def generate_synthetic_scene(scene_type: str) -> str:
     img.save(buf, format="JPEG", quality=85)
     return base64.b64encode(buf.getvalue()).decode()
 
-def send_task(robot_id: str, criticality: str, deadline_ms: float, scene_type: str):
+def submit_image_task(
+    robot_id: str,
+    criticality: str,
+    deadline_ms: float,
+    image_bytes: bytes,
+    source: str = "live_camera"
+):
     payload = {
         "robot_id": robot_id,
         "task_type": "object_detection",
         "criticality": criticality,
         "deadline_ms": deadline_ms,
-        "image_base64": generate_synthetic_scene(scene_type)
+        "image_base64": base64.b64encode(image_bytes).decode(),
+        "source": source,
     }
     try:
         resp = requests.post(f"{SERVER_URL}/api/v1/inference", json=payload, headers={"X-Robot-Token": "robot-token-secret"}, timeout=2.0)
@@ -246,6 +254,15 @@ def send_task(robot_id: str, criticality: str, deadline_ms: float, scene_type: s
     except Exception as e:
         st.sidebar.error(f"Gateway Error: {e}")
     return None
+
+def send_task(robot_id: str, criticality: str, deadline_ms: float, scene_type: str):
+    return submit_image_task(
+        robot_id,
+        criticality,
+        deadline_ms,
+        base64.b64decode(generate_synthetic_scene(scene_type)),
+        source="synthetic_dispatch"
+    )
 
 # ================= SIDEBAR: Mission Controls =================
 st.sidebar.title("🎮 RoboNexus Dispatcher")
@@ -270,6 +287,51 @@ scene = st.sidebar.selectbox("Camera Feed:", [
 
 c_crit = st.sidebar.selectbox("Criticality Level:", ["CRITICAL", "HIGH", "NORMAL", "LOW"], index=["CRITICAL", "HIGH", "NORMAL", "LOW"].index(p_info["crit"]))
 c_dl = st.sidebar.slider("Deadline (ms):", min_value=50, max_value=2000, value=int(p_info["dl"]), step=50)
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Live YOLO Camera")
+if "camera_enabled" not in st.session_state:
+    st.session_state["camera_enabled"] = False
+
+camera_button_label = "📷 Open Robot Camera" if not st.session_state["camera_enabled"] else "📷 Close Robot Camera"
+if st.sidebar.button(camera_button_label, width="stretch"):
+    st.session_state["camera_enabled"] = not st.session_state["camera_enabled"]
+    if not st.session_state["camera_enabled"]:
+        st.session_state.pop("live_camera_frame", None)
+    st.rerun()
+
+st.sidebar.caption("The webcam only activates after opening it. Uploaded photos are also queued through RADS for YOLO detection.")
+camera_frame = None
+if st.session_state["camera_enabled"]:
+    camera_frame = st.sidebar.camera_input("Capture robot camera frame", key="live_camera_frame")
+else:
+    st.sidebar.info("Camera is off. Click Open Robot Camera when you need a new frame.")
+
+uploaded_frame = st.sidebar.file_uploader("Or upload a JPEG/PNG", type=["jpg", "jpeg", "png"], key="live_upload_frame")
+live_frame = camera_frame if camera_frame is not None else uploaded_frame
+auto_run_live_yolo = st.sidebar.checkbox("Automatically process each new photo", value=True)
+
+if live_frame is not None and auto_run_live_yolo:
+    frame_bytes = live_frame.getvalue()
+    frame_hash = hashlib.sha256(frame_bytes).hexdigest()
+    if st.session_state.get("last_live_frame_hash") != frame_hash:
+        st.session_state["last_live_frame_hash"] = frame_hash
+        task_id = submit_image_task(p_info["id"], c_crit, float(c_dl), frame_bytes)
+        if task_id:
+            st.session_state["live_vision_task_id"] = task_id
+            st.sidebar.success(f"New camera frame queued: {task_id[:8]}...")
+elif live_frame is None:
+    # Clearing a frame permits a future capture of the same scene to be processed again.
+    st.session_state.pop("last_live_frame_hash", None)
+
+if st.sidebar.button("Run Real YOLO Inference", width="stretch"):
+    if live_frame is None:
+        st.sidebar.warning("Capture or upload an image first.")
+    else:
+        task_id = submit_image_task(p_info["id"], c_crit, float(c_dl), live_frame.getvalue())
+        if task_id:
+            st.session_state["live_vision_task_id"] = task_id
+            st.sidebar.success(f"Live frame queued: {task_id[:8]}... Open the Vision Feed tab for detections.")
 
 if st.sidebar.button("🚀 Dispatch Robot Task", width="stretch"):
     tid = send_task(p_info["id"], c_crit, float(c_dl), scene)
@@ -484,12 +546,18 @@ ARENA_HTML = """
         window.addEventListener('resize', resize);
         resize();
 
+        const liveVision = __LIVE_VISION_DATA__;
+        const liveImage = new Image();
+        if (liveVision.image) liveImage.src = liveVision.image;
+        const detectedClasses = (liveVision.detections || []).map(d => d.class_name);
+        const liveHazard = Boolean(liveVision.hazard_detected);
+
         let isRunning = true;
-        let humanHazard = false;
+        let humanHazard = liveHazard;
         let humanPos = { x: 560, y: 265 };
         let worker1Alive = true;
         let worker2Alive = true;
-        let latestLatency = 17.4;
+        let latestLatency = Number(liveVision.inference_ms || 17.4);
         let queueList = [
             { id: 'DRONE-07', crit: 'HIGH', p: 2, color: '#38bdf8' },
             { id: 'SWEEPER-12', crit: 'NORMAL', p: 5, color: '#34d399' },
@@ -1083,7 +1151,39 @@ ARENA_HTML = """
             ctx.font = 'bold 10px sans-serif';
             ctx.fillText("👁️ AGV REAL-TIME YOLOv8 CAM", hudX + 8, hudY + 14);
 
-            if (humanHazard) {
+            if (liveVision.image && liveImage.complete && liveImage.naturalWidth) {
+                const imgX = hudX + 8;
+                const imgY = hudY + 26;
+                const imgW = hudW - 16;
+                const imgH = 76;
+                ctx.drawImage(liveImage, imgX, imgY, imgW, imgH);
+
+                const scaleX = imgW / liveImage.naturalWidth;
+                const scaleY = imgH / liveImage.naturalHeight;
+                (liveVision.detections || []).forEach(det => {
+                    const [x1, y1, x2, y2] = det.box;
+                    const x = imgX + x1 * scaleX;
+                    const y = imgY + y1 * scaleY;
+                    const boxW = (x2 - x1) * scaleX;
+                    const boxH = (y2 - y1) * scaleY;
+                    const color = ['person', 'car', 'bus', 'truck'].includes(det.class_name) ? '#ef4444' : '#facc15';
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(x, y, boxW, boxH);
+                    const label = `${det.class_name.toUpperCase()} ${(det.confidence * 100).toFixed(0)}%`;
+                    ctx.font = 'bold 7px sans-serif';
+                    const labelW = ctx.measureText(label).width + 4;
+                    ctx.fillStyle = color;
+                    ctx.fillRect(x, Math.max(imgY, y - 9), labelW, 9);
+                    ctx.fillStyle = '#111827';
+                    ctx.fillText(label, x + 2, Math.max(imgY + 7, y - 2));
+                });
+
+                const summary = detectedClasses.length ? detectedClasses.join(', ').toUpperCase() : 'NO OBJECTS';
+                ctx.fillStyle = liveHazard ? '#ef4444' : '#10b981';
+                ctx.font = 'bold 8px monospace';
+                ctx.fillText(`${liveVision.action || 'YOLO'}: ${summary.substring(0, 21)}`, hudX + 8, hudY + 117);
+            } else if (humanHazard) {
                 ctx.strokeStyle = '#dc2626';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(hudX + 50, hudY + 32, 105, 60);
@@ -1391,6 +1491,40 @@ ARENA_HTML = """
 </html>
 """
 
+def get_live_vision_payload():
+    """Build a safe, compact payload for the canvas-based camera panel."""
+    if not redis_ok:
+        return {"image": "", "detections": [], "inference_ms": 0.0}
+
+    # Do not display another user's or an old demo frame. Each browser session
+    # sees only the image it submitted during the current session.
+    task_id = st.session_state.get("live_vision_task_id")
+    task = r.hgetall(f"task:{task_id}") if task_id else {}
+    if not task or task.get("state") != "completed":
+        return {"image": "", "detections": [], "inference_ms": 0.0}
+
+    try:
+        boxes = json.loads(task.get("boxes", "[]"))
+        classes = json.loads(task.get("classes", "[]"))
+        confidences = json.loads(task.get("confidences", "[]"))
+        detections = [
+            {"box": box, "class_name": str(class_name), "confidence": float(confidence)}
+            for box, class_name, confidence in zip(boxes, classes, confidences)
+        ]
+        return {
+            "image": f"data:image/jpeg;base64,{task.get('image_base64', '')}",
+            "detections": detections,
+            "inference_ms": float(task.get("inference_time_ms", 0.0)),
+            "action": task.get("perception_action", "PATH_CLEAR"),
+            "severity": task.get("perception_severity", "NONE"),
+            "reason": task.get("perception_reason", ""),
+            "hazard_detected": task.get("hazard_detected") == "true",
+        }
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {"image": "", "detections": [], "inference_ms": 0.0}
+
+live_vision_json = json.dumps(get_live_vision_payload()).replace("</", "<\\/")
+ARENA_HTML = ARENA_HTML.replace("__LIVE_VISION_DATA__", live_vision_json)
 components.html(ARENA_HTML, height=590)
 
 st.caption("Shared Edge AI Compute • RADS Dynamic Scheduling • Multi-Worker Fault Tolerance")
@@ -1685,14 +1819,24 @@ with tab5:
                     draw = ImageDraw.Draw(pil_img)
                     boxes = json.loads(latest_task.get("boxes", "[]"))
                     classes = json.loads(latest_task.get("classes", "[]"))
-                    for b, c in zip(boxes, classes):
+                    confidences = json.loads(latest_task.get("confidences", "[]"))
+                    for b, c, confidence in zip(boxes, classes, confidences):
                         draw.rectangle(b, outline="cyan", width=3)
-                        draw.text((b[0] + 4, max(4, b[1] - 12)), str(c).upper(), fill="yellow")
+                        draw.text(
+                            (b[0] + 4, max(4, b[1] - 14)),
+                            f"{str(c).upper()} {float(confidence):.0%}",
+                            fill="yellow"
+                        )
                     
                     dl_status = "✅ MET" if latest_task.get("deadline_met") == "true" else "❌ MISSED"
                     st.image(
                         pil_img,
-                        caption=f"Robot: {latest_task.get('robot_id')} | Criticality: {latest_task.get('criticality')} | Latency: {latest_task.get('inference_time_ms')}ms | Deadline: {dl_status}"
+                        caption=(
+                            f"Robot: {latest_task.get('robot_id')} | "
+                            f"Action: {latest_task.get('perception_action', 'PENDING')} | "
+                            f"Hazard: {latest_task.get('hazard_class', 'None')} | "
+                            f"Latency: {latest_task.get('inference_time_ms')}ms | Deadline: {dl_status}"
+                        )
                     )
                 except Exception as e:
                     st.warning(f"Feed error: {e}")
@@ -1712,6 +1856,8 @@ with tab5:
                         "Robot": d.get("robot_id", "-"),
                         "Criticality": d.get("criticality", "NORMAL"),
                         "Worker": d.get("assigned_worker", "-"),
+                        "Robot Action": d.get("perception_action", "-"),
+                        "Hazard": d.get("hazard_class", "-"),
                         "Status": d.get("state", "-").upper(),
                         "Latency": f"{float(d.get('inference_time_ms', 0)):.1f}ms" if d.get("inference_time_ms") else "-",
                         "Deadline Met": "YES" if d.get("deadline_met") == "true" else ("NO" if d.get("state") == "completed" else "-"),

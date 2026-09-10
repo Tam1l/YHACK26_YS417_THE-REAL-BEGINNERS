@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RoboNexus — Robotics-Aware Private AI Cloud Mission Control</title>
-    <link rel="stylesheet" href="/dashboard/style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <!-- Global Header -->
@@ -89,8 +89,77 @@
         </div>
     </div>
 
-    <!-- Main Container -->
-    <main class="app-container">
+    <!-- Persistent operator panel: combines the original dispatcher controls
+         with the richer NextGen mission-control surface. -->
+    <div class="operations-shell">
+        <aside class="operator-panel" aria-label="Robot dispatcher controls">
+            <div class="panel-heading">
+                <span class="panel-heading-icon">&#129302;</span>
+                <div><b>RoboNexus Dispatcher</b><small>RADS mission control</small></div>
+            </div>
+
+            <label class="panel-label" for="sidePresetSelect">Robot mission</label>
+            <select class="select-input panel-input" id="sidePresetSelect">
+                <option value="AGV-01">AGV-01: Collision Avoidance</option>
+                <option value="DRONE-04">DRONE-04: Aerial Navigation</option>
+                <option value="SWEEPER-09">SWEEPER-09: Floor Maintenance</option>
+                <option value="SCANNER-12">SCANNER-12: Bulk Inventory</option>
+            </select>
+
+            <label class="panel-label" for="sideSceneSelect">Camera scene</label>
+            <select class="select-input panel-input" id="sideSceneSelect">
+                <option value="human">Emergency: Human in AGV path</option>
+                <option value="pallet">Warehouse pallet obstacle</option>
+                <option value="dock">Auto-docking station</option>
+                <option value="clear">Clear transit corridor</option>
+            </select>
+
+            <label class="panel-label" for="sideCritSelect">Criticality</label>
+            <select class="select-input panel-input" id="sideCritSelect">
+                <option value="CRITICAL">CRITICAL</option><option value="HIGH">HIGH</option>
+                <option value="NORMAL">NORMAL</option><option value="LOW">LOW</option>
+            </select>
+
+            <label class="panel-label" for="sideDeadline">Deadline: <b id="sideDeadlineValue">100ms</b></label>
+            <input class="slider-input panel-input" id="sideDeadline" type="range" min="50" max="2000" step="50" value="100">
+
+            <div class="panel-divider"></div>
+            <h3>Live YOLO camera</h3>
+            <p class="panel-help">The camera stays off until you choose to take a photo. Uploaded images are processed through RADS and YOLO.</p>
+            <button class="btn btn-secondary panel-button" id="btnSideCamera">Open robot camera</button>
+            <div class="camera-preview" id="sideCameraPreview" hidden>
+                <button class="camera-shutter" id="btnCameraPreviewCapture" title="Click the live camera image to capture a photo">
+                    <video id="sideCameraVideo" autoplay muted playsinline></video>
+                    <span>Click live preview to capture</span>
+                </button>
+                <div class="camera-preview-actions">
+                    <button class="btn btn-primary" id="btnCaptureCamera">Capture and run YOLO</button>
+                    <button class="btn btn-slate" id="btnCloseCamera">Close camera</button>
+                </div>
+            </div>
+            <div class="operator-image-card" id="sideCapturedImageCard" hidden>
+                <div class="operator-image-label">Latest operator frame</div>
+                <img id="sideCapturedImage" alt="Latest camera or uploaded image submitted to YOLO">
+            </div>
+            <button class="btn btn-primary panel-button" id="btnSideUpload">Upload JPEG / PNG</button>
+            <label class="panel-check"><input id="sideAutoYolo" type="checkbox" checked> Process each selected photo automatically</label>
+            <button class="btn btn-slate panel-button" id="btnSideRunYolo" disabled>Run Real YOLO Inference</button>
+            <div id="sideVisionStatus" class="panel-status">Waiting for an operator photo</div>
+
+            <button class="btn btn-primary panel-button" id="btnSideDispatch">Dispatch robot task</button>
+            <div class="panel-divider"></div>
+            <h3>Quick operations</h3>
+            <button class="panel-link" data-side-tab="tabFabric">Dynamic worker fabric</button>
+            <button class="panel-link" data-side-tab="tabAutoscaler">Elastic autoscaler</button>
+            <button class="panel-link" data-side-tab="tabTenants">Fleet RBAC and quotas</button>
+            <button class="panel-link" data-side-tab="tabIncidents">S3 black-box incidents</button>
+            <button class="panel-link" data-side-tab="tabBenchmarks">YOLO vision feed</button>
+            <div class="panel-divider"></div>
+            <button class="btn btn-slate panel-button" id="btnSideReset">Reset system and workers</button>
+        </aside>
+
+        <!-- Main Container -->
+        <main class="app-container">
 
         <!-- 2D Simulation Arena Card -->
         <section class="arena-card">
@@ -549,6 +618,13 @@
                             </div>
                             <button class="btn btn-secondary" id="btnRefreshFeed" style="font-size: 11px; padding: 4px 8px;">🔄 Snapshot</button>
                         </div>
+                        <div class="feed-footer" style="padding-top: 0; gap: 8px; flex-wrap: wrap;">
+                            <input id="visionImageUpload" type="file" accept="image/jpeg,image/png" hidden>
+                            <input id="visionCameraCapture" type="file" accept="image/jpeg,image/png" capture="environment" hidden>
+                            <button class="btn btn-primary" id="btnUploadVision" style="font-size: 11px; padding: 5px 9px;">Upload photo for YOLO</button>
+                            <button class="btn btn-secondary" id="btnOpenVisionCamera" style="font-size: 11px; padding: 5px 9px;">Take camera photo</button>
+                            <span id="visionActionStatus" style="font-size: 11px; font-weight: 700; color: var(--text-secondary);">Camera is off</span>
+                        </div>
                     </div>
 
                     <!-- Right: Real-Time Execution Log Stream -->
@@ -610,11 +686,12 @@
             </div>
         </section>
 
-    </main>
+        </main>
+    </div>
 
     <!-- Toast Notifications Container -->
     <div id="toastContainer"></div>
 
-    <script src="/dashboard/app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

@@ -55,7 +55,7 @@ services:
   # 3. Dual-Protocol Ingress Gateway: FastAPI + Fleet RBAC
   # -------------------------------------------------------------
   gateway:
-    build: .
+    image: robonexus-runtime:latest
     container_name: robonexus-gateway
     command: uvicorn server:app --host 0.0.0.0 --port 8000
     ports:
@@ -74,7 +74,7 @@ services:
   # 4. Elastic AI Inference Worker Pool & Autoscaler
   # -------------------------------------------------------------
   worker-pool:
-    build: .
+    image: robonexus-runtime:latest
     container_name: robonexus-worker-pool
     command: python worker.py
     environment:
@@ -95,9 +95,11 @@ services:
   # 5. Mission Control Ground Station & Telemetry Dashboard
   # -------------------------------------------------------------
   dashboard:
-    build: .
+    image: robonexus-runtime:latest
     container_name: robonexus-mission-control
-    command: streamlit run dashboard.py --server.port 8501 --server.headless true --server.enableCORS false
+    # The NextGen mission-control UI is the operator-facing dashboard.
+    # Its API calls are routed to the gateway on port 8000.
+    command: python -m http.server 8501 --directory /app/web
     ports:
       - "8501:8501"
     environment:
@@ -116,7 +118,7 @@ services:
   # 6. Multi-Robot Fleet Simulator (Autonomous Background Agent)
   # -------------------------------------------------------------
   fleet-simulator:
-    build: .
+    image: robonexus-runtime:latest
     container_name: robonexus-fleet-simulator
     command: python robot_simulator.py
     environment:
