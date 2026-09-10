@@ -130,53 +130,46 @@
                 <div id="arenaBanner"></div>
             </div>
 
-            <!-- Arena Bottom Controls Deck (Live Pitch Demos) -->
+            <!-- Arena Bottom Controls Deck (8 Interactive Colored Demos) -->
             <div class="controls-deck">
-                <!-- Tier 1: Fleet Operations & Safety -->
-                <div class="deck-row">
-                    <div class="deck-section">
-                        <div class="deck-badge">
-                            <span class="chip-dot blue"></span> FLEET OPS & SAFETY
+                <div class="deck-grid-2x2">
+                    <!-- Left Quad (2 Top, 2 Bottom) -->
+                    <div class="deck-quad-group">
+                        <div class="deck-btn-pair">
+                            <button class="btn btn-primary" id="btnBatchDemo" title="Injects routine batch and preemption leapfrog, navigating to Tab 5">
+                                📦 <span>5x Batch Leapfrog</span> <span class="btn-tab-tag">Tab 5</span>
+                            </button>
+                            <button class="btn btn-warning" id="btnKillWorker" title="Simulates worker-1 crash/failover, navigating to Tab 1">
+                                🔥 <span>Kill Worker-1</span> <span class="btn-tab-tag">Tab 1</span>
+                            </button>
                         </div>
-                        <button class="btn btn-slate" id="btnPlayPause">⏸ <span>Pause Fleet</span></button>
-                        <button class="btn btn-danger" id="btnHazard" title="Triggers emergency stop and navigates to Tab 4 (S3 Incident Black-Box)">
-                            🚨 <span>Emergency Hazard (AGV-01)</span> <span class="btn-tab-tag">Tab 4</span>
-                        </button>
+                        <div class="deck-btn-pair">
+                            <button class="btn btn-emerald" id="btnLakehouseExport" title="Data lakehouse export: dumps Redis events & incidents into Apache Parquet format, navigating to Tab 4">
+                                📊 <span>Parquet Export</span> <span class="btn-tab-tag">Tab 4</span>
+                            </button>
+                            <button class="btn btn-danger" id="btnHazard" title="Triggers emergency stop and navigates to Tab 4 (S3 Incident Black-Box)">
+                                🚨 <span>Emergency Hazard (AGV-01)</span> <span class="btn-tab-tag">Tab 4</span>
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Tier 2: Interactive Architecture Demos -->
-                <div class="deck-row">
-                    <div class="deck-section deck-demos">
-                        <div class="deck-badge">
-                            <span class="chip-dot emerald"></span> LIVE DEMOS
+                    <!-- Right Quad (2 Top, 2 Bottom) -->
+                    <div class="deck-quad-group">
+                        <div class="deck-btn-pair">
+                            <button class="btn btn-emerald" id="btnSurge" title="Simulates queue surge and autoscaling, navigating to Tab 2">
+                                📈 <span>Fleet Surge</span> <span class="btn-tab-tag">Tab 2</span>
+                            </button>
+                            <button class="btn btn-cyan" id="btnAnnounceMission" title="Predictive scaling: registers high-load mission 15s ahead, triggering 30s proactive pre-warming">
+                                📅 <span>Announce Mission</span> <span class="btn-tab-tag">Tab 2</span>
+                            </button>
                         </div>
-                        <div class="deck-buttons">
-                            <div class="deck-btn-row">
-                                <button class="btn btn-primary" id="btnBatchDemo" title="Injects routine batch and preemption leapfrog, navigating to Tab 5">
-                                    📦 <span>5x Batch Leapfrog</span> <span class="btn-tab-tag">Tab 5</span>
-                                </button>
-                                <button class="btn btn-warning" id="btnKillWorker" title="Simulates worker-1 crash/failover, navigating to Tab 1">
-                                    🔥 <span>Kill Worker-1</span> <span class="btn-tab-tag">Tab 1</span>
-                                </button>
-                                <button class="btn btn-emerald" id="btnSurge" title="Simulates queue surge and autoscaling, navigating to Tab 2">
-                                    📈 <span>Fleet Surge</span> <span class="btn-tab-tag">Tab 2</span>
-                                </button>
-                                <button class="btn btn-cyan" id="btnAnnounceMission" title="Predictive scaling: registers high-load mission 15s ahead, triggering 30s proactive pre-warming">
-                                    📅 <span>Announce Mission</span> <span class="btn-tab-tag">Tab 2</span>
-                                </button>
-                                <button class="btn btn-rose" id="btnRogue" title="Tests zero-trust token rejection, navigating to Tab 3">
-                                    🛡️ <span>Rogue Token</span> <span class="btn-tab-tag">Tab 3</span>
-                                </button>
-                                <button class="btn btn-warning" id="btnEdgeFallback" title="Latency-aware fallback: rejects unreachable deadlines with EXECUTE_AT_EDGE, navigating to Tab 5">
-                                    🛡️ <span>Edge Fallback</span> <span class="btn-tab-tag">Tab 5</span>
-                                </button>
-                            </div>
-                            <div class="deck-btn-row">
-                                <button class="btn btn-emerald" id="btnLakehouseExport" title="Data lakehouse export: dumps Redis events & incidents into Apache Parquet format, navigating to Tab 4">
-                                    📊 <span>Parquet Export</span> <span class="btn-tab-tag">Tab 4</span>
-                                </button>
-                            </div>
+                        <div class="deck-btn-pair">
+                            <button class="btn btn-rose" id="btnRogue" title="Tests zero-trust token rejection, navigating to Tab 3">
+                                🛡️ <span>Rogue Token</span> <span class="btn-tab-tag">Tab 3</span>
+                            </button>
+                            <button class="btn btn-warning" id="btnEdgeFallback" title="Latency-aware fallback: rejects unreachable deadlines with EXECUTE_AT_EDGE, navigating to Tab 5">
+                                🛡️ <span>Edge Fallback</span> <span class="btn-tab-tag">Tab 5</span>
+                            </button>
                         </div>
                     </div>
                 </div>

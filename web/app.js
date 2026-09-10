@@ -2098,7 +2098,7 @@ window.navigateToTab = navigateToTab;
 
 // ================= DEMO ACTIONS & CONTROLS =================
 // 1. Play / Pause
-document.getElementById('btnPlayPause').addEventListener('click', (e) => {
+document.getElementById('btnPlayPause')?.addEventListener('click', (e) => {
     isRunning = !isRunning;
     e.currentTarget.innerHTML = isRunning ? '⏸ <span>Pause Fleet</span>' : '▶ <span>Resume Fleet</span>';
     showToast(isRunning ? "Fleet Simulation Resumed" : "Fleet Simulation Paused", "info");
