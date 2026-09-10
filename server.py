@@ -16,6 +16,7 @@ from rads import deadline_risk, rads_score
 import rads
 import fleet_tenants
 import incident_archiver
+import autoscaler
 
 try:
     import jwt
@@ -114,6 +115,12 @@ class PredictRequest(BaseModel):
         if not v:
             raise ValueError("image_base64 cannot be empty")
         return v
+
+class MissionAnnouncement(BaseModel):
+    fleet_id: str = Field(..., description="Unique fleet identifier (e.g. FLEET-AGV-LOGISTICS, FLEET-DRONE-PATROL)")
+    expected_critical_tasks: int = Field(..., ge=1, le=500, description="Expected critical inference tasks to be scheduled")
+    start_time: str = Field(..., description="Mission start time as ISO 8601 (e.g. 2026-09-11T02:30:00Z) or epoch seconds")
+    duration_seconds: float = Field(60.0, ge=5.0, le=3600.0, description="Estimated duration of high-intensity mission in seconds")
 
 app = FastAPI(title="RoboNexus — Enterprise Robot AI Private Cloud Gateway", version="3.0.0")
 
@@ -323,6 +330,8 @@ def get_system_metrics():
     
     failovers = int(redis_client.get("stats:failovers") or 0)
     queue_depth = int(redis_client.zcard("queue:tasks") or 0)
+    predictive_scale_ups = int(redis_client.get("stats:predictive_scale_ups") or 0)
+    active_missions_count = int(redis_client.scard("missions:active") or 0)
     
     return {
         "total_processed": processed,
@@ -331,8 +340,117 @@ def get_system_metrics():
         "critical_deadline_satisfaction_rate_pct": cdsr,
         "critical_tasks_total": crit_total,
         "critical_tasks_met": crit_met,
-        "failovers_recovered": failovers
+        "failovers_recovered": failovers,
+        "predictive_scale_ups": predictive_scale_ups,
+        "active_missions": active_missions_count
     }
+
+# ----------------- Predictive Compute Provisioning Endpoints -----------------
+@app.post("/api/v1/mission/announce", status_code=status.HTTP_201_CREATED)
+def announce_mission(request: MissionAnnouncement, auth=Depends(verify_token)):
+    """
+    Predictive Compute Provisioning:
+    Allows AGV/drone robot fleets to register high-intensity upcoming missions.
+    RoboNexus evaluates the mission start time and pre-warms worker pools 30s
+    prior to request surge, preventing queue spikes.
+    """
+    try:
+        start_ts = autoscaler.parse_mission_time(request.start_time)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid start_time: {e}")
+        
+    now = time.time()
+    lead_time = start_ts - now
+    
+    # Calculate required worker pool capacity
+    if request.expected_critical_tasks >= 15:
+        target_workers = 5
+    elif request.expected_critical_tasks >= 6:
+        target_workers = 4
+    else:
+        target_workers = 3
+        
+    mission_id = f"MSN-{uuid.uuid4().hex[:8].upper()}"
+    status_label = "PRE_WARMING" if lead_time <= 30.0 else "ANNOUNCED"
+    
+    mission_data = {
+        "mission_id": mission_id,
+        "fleet_id": request.fleet_id,
+        "expected_critical_tasks": str(request.expected_critical_tasks),
+        "start_time_iso": str(request.start_time),
+        "start_time_ts": str(start_ts),
+        "duration_seconds": str(request.duration_seconds),
+        "end_time_ts": str(start_ts + request.duration_seconds),
+        "target_workers": str(target_workers),
+        "status": status_label,
+        "created_at": str(now)
+    }
+    
+    redis_client.hset(f"mission:{mission_id}", mapping=mission_data)
+    redis_client.sadd("missions:active", mission_id)
+    redis_client.lpush("missions:history", json.dumps(mission_data))
+    redis_client.ltrim("missions:history", 0, 49)
+    
+    log_msg = (
+        f"Fleet '{request.fleet_id}' announced high-intensity mission {mission_id}: "
+        f"{request.expected_critical_tasks} tasks starting in {round(lead_time, 1)}s. "
+        f"Proactive target: {target_workers} workers."
+    )
+    redis_client.lpush("cloud:autoscaler:events", f"[{time.strftime('%H:%M:%S')}] [MISSION_ANNOUNCED] {log_msg}")
+    redis_client.ltrim("cloud:autoscaler:events", 0, 49)
+    
+    return {
+        "status": status_label,
+        "mission_id": mission_id,
+        "fleet_id": request.fleet_id,
+        "expected_critical_tasks": request.expected_critical_tasks,
+        "start_time": request.start_time,
+        "start_time_ts": start_ts,
+        "duration_seconds": request.duration_seconds,
+        "lead_time_seconds": round(lead_time, 2),
+        "target_prewarmed_workers": target_workers,
+        "policy": "Predictive Pre-Warm (30s Proactive Compute Provisioning)",
+        "message": f"Mission registered successfully. Control plane will pre-warm to {target_workers} workers ahead of traffic."
+    }
+
+@app.get("/api/v1/mission/active")
+def get_active_missions():
+    """Returns active and upcoming scheduled missions."""
+    now = time.time()
+    mission_ids = redis_client.smembers("missions:active") or set()
+    missions = []
+    for m_id in mission_ids:
+        m_data = redis_client.hgetall(f"mission:{m_id}")
+        if m_data:
+            start_ts = float(m_data.get("start_time_ts", 0))
+            end_ts = float(m_data.get("end_time_ts", 0))
+            lead_time = max(0.0, start_ts - now)
+            time_left = max(0.0, end_ts - now)
+            missions.append({
+                **m_data,
+                "lead_time_seconds": round(lead_time, 1),
+                "time_remaining_seconds": round(time_left, 1),
+                "is_prewarming": lead_time <= 30.0 and now < start_ts,
+                "is_active": now >= start_ts and now <= end_ts
+            })
+    return {"active_missions": missions, "count": len(missions)}
+
+@app.post("/api/v1/mission/demo_announce")
+def demo_announce_mission():
+    """
+    Live Demo Shortcut:
+    Announces a high-load AGV surge mission starting in 15 seconds (within the 30s pre-warm window).
+    Demonstrates proactive scaling and predictive event logging immediately.
+    """
+    now = time.time()
+    start_time = now + 15.0 # Starts in 15s to trigger pre-warming right away
+    sub = MissionAnnouncement(
+        fleet_id="FLEET-AGV-LOGISTICS",
+        expected_critical_tasks=18,
+        start_time=str(start_time),
+        duration_seconds=45.0
+    )
+    return announce_mission(sub, auth={"tenant": fleet_tenants.TENANTS["FLEET-AGV-LOGISTICS"]})
 
 # ----------------- Private Cloud Management Endpoints -----------------
 @app.get("/api/v1/cloud/status")
@@ -348,6 +466,8 @@ def get_cloud_topology():
         if w_data:
             workers_info.append(w_data)
             
+    active_missions_info = get_active_missions().get("active_missions", [])
+            
     return {
         "cloud_name": "RoboNexus Autonomous Private Edge Cloud",
         "cluster_health": "OPTIMAL",
@@ -357,15 +477,19 @@ def get_cloud_topology():
             "min_workers": int(autoscaler_state.get("min_workers", 2)),
             "max_workers": int(autoscaler_state.get("max_workers", 5)),
             "queue_depth": int(autoscaler_state.get("queue_depth", 0)),
+            "active_mission_id": autoscaler_state.get("active_mission_id", ""),
+            "policy": autoscaler_state.get("policy", "KEDA-style Queue Depth Metric"),
             "recent_events": autoscaler_events
         },
         "workers": workers_info,
+        "scheduled_missions": active_missions_info,
         "s3_incident_archiver": {
             "status": "ONLINE",
             "bucket": "s3://robonexus-incidents/",
             "total_archived": int(redis_client.get("stats:incidents_archived") or 0)
         }
     }
+
 
 @app.get("/api/v1/cloud/tenants")
 def get_fleet_tenants_overview():

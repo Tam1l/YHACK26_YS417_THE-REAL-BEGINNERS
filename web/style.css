@@ -441,6 +441,28 @@ body {
     background: #be123c;
 }
 
+.btn-cyan {
+    background: #0891b2;
+    color: #ffffff;
+}
+
+.btn-cyan:hover {
+    background: #0e7490;
+}
+
+.log-entry.scale-predictive {
+    background: rgba(6, 182, 212, 0.12);
+    border-left: 3px solid #0891b2;
+    color: #0e7490;
+    font-weight: 600;
+}
+
+[data-theme="dark"] .log-entry.scale-predictive {
+    background: rgba(6, 182, 212, 0.2);
+    border-left: 3px solid #22d3ee;
+    color: #67e8f9;
+}
+
 /* ================= METRIC CARDS ================= */
 .metrics-grid {
     display: grid;

@@ -604,7 +604,7 @@ async function pollTelemetry() {
             latestClusterData = s;
             updateMetrics(s, liveMetrics);
             updateFabricTab(s.workers || []);
-            updateAutoscalerTab(s.autoscaler || {});
+            updateAutoscalerTab(s.autoscaler || {}, s.scheduled_missions || []);
         } else if (liveMetrics) {
             updateMetrics({}, liveMetrics);
         }
@@ -802,21 +802,70 @@ function updateFabricTab(workers) {
     });
 }
 
-function updateAutoscalerTab(as) {
+function updateAutoscalerTab(as, missions = []) {
+    // 1. Update policy and state display
+    const stateEl = document.getElementById('asStateVal');
+    if (stateEl && as.status) {
+        stateEl.innerText = as.status;
+        stateEl.style.color = as.status.includes('PREDICTIVE') ? '#0891b2' : (as.status.includes('SCALED') ? '#10b981' : 'var(--text-primary)');
+    }
+    const podsEl = document.getElementById('asPodsVal');
+    if (podsEl && as.current_workers) {
+        podsEl.innerText = `${as.current_workers} / ${as.max_workers || 5}`;
+    }
+
+    // 2. Render Scheduled / Active Missions
+    const missionsContainer = document.getElementById('scheduledMissionsContainer');
+    if (missionsContainer) {
+        if (!missions || missions.length === 0) {
+            missionsContainer.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); font-style: italic;">No active missions announced. Click "Announce AGV Mission" to test proactive worker pre-warming.</div>';
+        } else {
+            missionsContainer.innerHTML = '';
+            missions.forEach(m => {
+                const card = document.createElement('div');
+                card.style.cssText = "display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; background: var(--bg-card); border-radius: 8px; border-left: 4px solid #0891b2; margin-top: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);";
+                
+                const statusColor = m.is_active ? "#10b981" : (m.is_prewarming ? "#f59e0b" : "#64748b");
+                const statusBadge = m.is_active ? "ACTIVE MISSION 🟢" : (m.is_prewarming ? "PRE-WARMING 🟡" : "ANNOUNCED ⚪");
+                const timerText = m.is_active 
+                    ? `Time Remaining: <b>${Math.ceil(m.time_remaining_seconds)}s</b>` 
+                    : `Kickoff in: <b>${Math.ceil(m.lead_time_seconds)}s</b>`;
+                
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 14px; font-weight: 700; color: #0891b2;">${m.mission_id}</span>
+                        <span class="code-pill" style="font-size: 11px;">${m.fleet_id}</span>
+                        <span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(8,145,178,0.1); color: ${statusColor}; font-weight: 700;">
+                            ${statusBadge}
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 14px; font-size: 12px;">
+                        <span>Target Capacity: <b>${m.target_workers} Pods</b></span>
+                        <span>Load: <b>${m.expected_critical_tasks} tasks</b></span>
+                        <span style="color: #0891b2;">${timerText}</span>
+                    </div>
+                `;
+                missionsContainer.appendChild(card);
+            });
+        }
+    }
+
+    // 3. Render event logs
     const container = document.getElementById('autoscalerLogContainer');
     const events = as.recent_events || [];
     container.innerHTML = '';
 
     if (events.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-muted);">Autoscaler initialized. Trigger Fleet Surge to observe auto-provisioning.</div>';
+        container.innerHTML = '<div style="color: var(--text-muted);">Autoscaler initialized. Trigger Fleet Surge or Announce Mission to observe auto-provisioning.</div>';
         return;
     }
 
     events.forEach(ev => {
         const entry = document.createElement('div');
         let cls = 'log-entry';
-        if (ev.includes('SCALE_UP')) cls += ' scale-up';
-        if (ev.includes('SCALE_DOWN')) cls += ' scale-down';
+        if (ev.includes('PREDICTIVE_SCALE_UP') || ev.includes('PREDICTIVE')) cls += ' scale-predictive';
+        else if (ev.includes('SCALE_UP')) cls += ' scale-up';
+        else if (ev.includes('SCALE_DOWN')) cls += ' scale-down';
         entry.className = cls;
         entry.innerText = ev;
         container.appendChild(entry);
@@ -1413,6 +1462,26 @@ document.getElementById('btnSurge').addEventListener('click', async () => {
         showToast(`Surge error: ${e}`, "error");
     }
 });
+
+// Announce High-Compute Mission (Predictive Provisioning Demo)
+async function triggerAnnounceMission() {
+    showBanner("📅 PREDICTIVE PROVISIONING: AGV HIGH-LOAD MISSION ANNOUNCED (15s LEAD TIME). PROACTIVE WORKER PRE-WARM INITIATED...", "rgba(8, 145, 178, 0.95)", "#0891b2");
+    navigateToTab('tabAutoscaler', '#scheduledMissionsContainer', true, 1400);
+    try {
+        const res = await fetch('/api/v1/mission/demo_announce', { method: 'POST' });
+        const data = await res.json();
+        showToast(`📅 Mission ${data.mission_id} announced (${data.expected_critical_tasks} tasks)! Proactively pre-warming ${data.target_prewarmed_workers} workers ahead of surge.`, "info", 5000);
+    } catch (e) {
+        showToast(`Mission announcement failed: ${e}`, "error");
+    }
+}
+
+const btnMissionDeck = document.getElementById('btnAnnounceMission');
+if (btnMissionDeck) btnMissionDeck.addEventListener('click', triggerAnnounceMission);
+
+const btnMissionTab = document.getElementById('btnAnnounceMissionTab');
+if (btnMissionTab) btnMissionTab.addEventListener('click', triggerAnnounceMission);
+
 
 const DUMMY_BASE64_IMAGE = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 

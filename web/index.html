@@ -112,6 +112,7 @@
                     <button class="btn btn-primary" id="btnBatchDemo" title="Injects routine batch and preemption leapfrog, navigating to Tab 5">📦 <span>5x Batch Leapfrog</span> <span class="btn-tab-tag">Tab 5</span></button>
                     <button class="btn btn-warning" id="btnKillWorker" title="Simulates worker-1 crash/failover, navigating to Tab 1">🔥 <span>KILL WORKER-1</span> <span class="btn-tab-tag">Tab 1</span></button>
                     <button class="btn btn-emerald" id="btnSurge" title="Simulates queue surge and autoscaling, navigating to Tab 2">📈 <span>Fleet Surge</span> <span class="btn-tab-tag">Tab 2</span></button>
+                    <button class="btn btn-cyan" id="btnAnnounceMission" title="Predictive scaling: registers high-load mission 15s ahead, triggering 30s proactive pre-warming">📅 <span>Announce Mission</span> <span class="btn-tab-tag">Tab 2</span></button>
                     <button class="btn btn-rose" id="btnRogue" title="Tests zero-trust token rejection, navigating to Tab 3">🛡️ <span>Rogue Token</span> <span class="btn-tab-tag">Tab 3</span></button>
                 </div>
             </div>
@@ -214,6 +215,28 @@
                         <div class="metric-val" style="font-size: 18px;">&ge; 3 tasks</div>
                     </div>
                 </div>
+
+                <!-- Predictive Compute Provisioning & Missions Card -->
+                <div style="margin-bottom: 20px; padding: 16px; background: rgba(8, 145, 178, 0.05); border: 1px solid rgba(8, 145, 178, 0.25); border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 22px;">📅</span>
+                            <div>
+                                <h4 style="font-size: 14px; font-weight: 700; color: #0891b2; margin: 0;">Predictive Compute Provisioning & Upcoming Missions</h4>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                                    Evaluates announced robot missions and proactively provisions worker pods 30s before the surge hits, eliminating cold-start latency.
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-cyan" id="btnAnnounceMissionTab" style="font-size: 12px; padding: 6px 12px;">
+                            ⚡ <span>Announce AGV Mission (15s Pre-Warm Demo)</span>
+                        </button>
+                    </div>
+                    <div id="scheduledMissionsContainer">
+                        <div style="font-size: 12px; color: var(--text-muted); font-style: italic;">No active missions announced. Click "Announce AGV Mission" to test proactive worker pre-warming.</div>
+                    </div>
+                </div>
+
                 <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">📜 Real-Time Provisioning Event Log</h4>
                 <div class="terminal-log" id="autoscalerLogContainer">
                     <!-- Logs injected dynamically -->
