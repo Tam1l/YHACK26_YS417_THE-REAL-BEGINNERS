@@ -1139,10 +1139,10 @@ function drawSweeperEntity(light) {
     ctx.fillStyle = (Date.now() % 500 < 250) ? '#f59e0b' : '#d97706';
     ctx.beginPath(); ctx.arc(sweeper.x, sweeper.y, 4.5, 0, Math.PI * 2); ctx.fill();
 
-    // Label
+    // Label with clean margin gap below rotating brush
     ctx.fillStyle = light ? '#047857' : '#34d399';
     ctx.font = 'bold 8.5px monospace';
-    ctx.fillText("SWEEPER-12 [LEVEL 0 SANITIZER]", sweeper.x - 65, sweeper.y + 24);
+    ctx.fillText("SWEEPER-12 [LEVEL 0 SANITIZER]", sweeper.x - 65, sweeper.y + 32);
     ctx.restore();
 }
 

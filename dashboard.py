@@ -517,7 +517,7 @@ ARENA_HTML = """
         const sweeper = {
             id: 'SWEEPER-12',
             x: 320,
-            y: 345,
+            y: 338,
             dir: 1,
             speed: 1.2,
             brushAngle: 0,
@@ -815,20 +815,20 @@ ARENA_HTML = """
             ctx.font = '8.5px monospace';
             ctx.fillText("✈️ AERIAL INSPECTION FLIGHT CORRIDOR (ALTITUDE: 4.8m)", 260, 218);
 
-            // Lower Floor Maintenance Apron: Sweeper sweeps along y = 345
+            // Lower Floor Maintenance Apron: Sweeper sweeps along y = 338
             ctx.strokeStyle = 'rgba(5, 150, 105, 0.25)';
             ctx.setLineDash([6, 6]);
             ctx.beginPath();
-            ctx.moveTo(30, 345); ctx.lineTo(w - 270, 345);
+            ctx.moveTo(30, 338); ctx.lineTo(w - 270, 338);
             ctx.stroke();
             ctx.setLineDash([]);
             ctx.fillStyle = '#059669';
             ctx.font = '8.5px monospace';
-            ctx.fillText("🧹 AISLE 02 [LEVEL 0: FLOOR SANITIZATION & DUST SCRUBBING ZONE]", 24, 335);
+            ctx.fillText("🧹 AISLE 02 [LEVEL 0: FLOOR SANITIZATION & DUST SCRUBBING ZONE]", 24, 324);
 
             // Lower Floor Storage Racks (Level 0: Perimeter Staging & Buffer)
-            drawRack(24, 375, 240, 60, '#34d399', 'RACK-C [INVENTORY & RAW]', 'LEVEL 0: SWEEPER AISLE PERIMETER', true);
-            drawRack(Math.max(280, Math.floor((w - 240) / 2)), 375, 240, 60, '#f472b6', 'RACK-D [STAGING & BUFFER]', 'LEVEL 0: SWEEPER AISLE PERIMETER', true);
+            drawRack(24, 380, 240, 60, '#34d399', 'RACK-C [INVENTORY & RAW]', 'LEVEL 0: SWEEPER AISLE PERIMETER', true);
+            drawRack(Math.max(280, Math.floor((w - 240) / 2)), 380, 240, 60, '#f472b6', 'RACK-D [STAGING & BUFFER]', 'LEVEL 0: SWEEPER AISLE PERIMETER', true);
         }
 
         function drawRack(x, y, w, h, accentColor, label, tierLevel, light = true) {
@@ -1628,7 +1628,7 @@ ARENA_HTML = """
 
             ctx.fillStyle = '#047857';
             ctx.font = 'bold 8.5px monospace';
-            ctx.fillText("SWEEPER-12 [LEVEL 0 SANITIZER]", sweeper.x - 65, sweeper.y + 24);
+            ctx.fillText("SWEEPER-12 [LEVEL 0 SANITIZER]", sweeper.x - 65, sweeper.y + 32);
             ctx.restore();
 
             // 5. Packets in flight
