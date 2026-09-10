@@ -505,15 +505,22 @@ ARENA_HTML = """
             id: 'DRONE-07',
             x: 260,
             y: 195,
-            angle: 0,
+            speed: 1.8,
+            rotorAngle: 0,
+            tilt: 0,
+            bayHoverTimer: 0,
+            currentBayIndex: 0,
+            scannedSKU: 'SKU-4821 [VERIFIED]',
             color: '#38bdf8'
         };
 
         const sweeper = {
             id: 'SWEEPER-12',
             x: 320,
-            y: 328,
+            y: 345,
             dir: 1,
+            speed: 1.2,
+            brushAngle: 0,
             color: '#34d399'
         };
 
@@ -792,57 +799,456 @@ ARENA_HTML = """
             ctx.fillText("TELEMETRY: 5.8 GHz RAW", dockX + 16, dockY + 62);
             ctx.fillText("STATUS: ACTIVE READY", dockX + 16, dockY + 80);
 
-            // Storage Racks - Clean White with colored inventory bins
-            const rackW = 175;
-            const rackH = 46;
-
-            const topRacks = [
-                { x: 24, y: 122, label: "RACK AISLE A1" },
-                { x: 224, y: 122, label: "RACK AISLE A2" },
-                { x: 424, y: 122, label: "RACK AISLE A3" },
-                { x: 624, y: 122, label: "RACK AISLE A4" }
-            ];
-
-            const bottomRacks = [
-                { x: 24, y: 356, label: "RACK AISLE B1" },
-                { x: 224, y: 356, label: "RACK AISLE B2" },
-                { x: 424, y: 356, label: "RACK AISLE B3" }
-            ];
-
-            const allRacks = [...topRacks, ...bottomRacks].filter(r => r.x + rackW <= w - 10);
-
-            allRacks.forEach(r => {
-                // Shelf Body
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(r.x, r.y, rackW, rackH);
-                ctx.strokeStyle = '#cbd5e1';
-                ctx.lineWidth = 1.5;
-                ctx.strokeRect(r.x, r.y, rackW, rackH);
-
-                // Rack Label
-                ctx.fillStyle = '#475569';
-                ctx.font = 'bold 10px monospace';
-                ctx.fillText(r.label, r.x + 10, r.y + 28);
-
-                // Inventory Bins
-                for (let b = 0; b < 4; b++) {
-                    const bx = r.x + 102 + (b * 16);
-                    ctx.fillStyle = (b % 2 === 0) ? '#f59e0b' : '#2563eb';
-                    ctx.fillRect(bx, r.y + 12, 12, 22);
-                    ctx.strokeStyle = '#cbd5e1';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(bx, r.y + 12, 12, 22);
-                }
-            });
+            // Upper High-Bay Storage Racks (Level 3: Aerial Drone Inspection Layer)
+            drawRack(24, 118, 240, 60, '#38bdf8', 'RACK-A [HIGH-BAY LOGISTICS]', 'LEVEL 3: AERIAL DRONE SCAN LAYER', true);
+            drawRack(w - 264, 118, 240, 60, '#818cf8', 'RACK-B [HIGH-BAY AUTOMATED]', 'LEVEL 3: AERIAL DRONE SCAN LAYER', true);
 
             // Drone flight path dashed guide
             ctx.strokeStyle = 'rgba(2, 132, 199, 0.25)';
             ctx.lineWidth = 1;
             ctx.setLineDash([4, 8]);
             ctx.beginPath();
-            ctx.moveTo(20, 195); ctx.lineTo(w - 20, 195);
+            ctx.moveTo(30, 205); ctx.lineTo(w - 30, 205);
             ctx.stroke();
             ctx.setLineDash([]);
+            ctx.fillStyle = '#0284c7';
+            ctx.font = '8.5px monospace';
+            ctx.fillText("✈️ AERIAL INSPECTION FLIGHT CORRIDOR (ALTITUDE: 4.8m)", 260, 218);
+
+            // Lower Floor Maintenance Apron: Sweeper sweeps along y = 345
+            ctx.strokeStyle = 'rgba(5, 150, 105, 0.25)';
+            ctx.setLineDash([6, 6]);
+            ctx.beginPath();
+            ctx.moveTo(30, 345); ctx.lineTo(w - 270, 345);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#059669';
+            ctx.font = '8.5px monospace';
+            ctx.fillText("🧹 AISLE 02 [LEVEL 0: FLOOR SANITIZATION & DUST SCRUBBING ZONE]", 24, 335);
+
+            // Lower Floor Storage Racks (Level 0: Perimeter Staging & Buffer)
+            drawRack(24, 375, 240, 60, '#34d399', 'RACK-C [INVENTORY & RAW]', 'LEVEL 0: SWEEPER AISLE PERIMETER', true);
+            drawRack(Math.max(280, Math.floor((w - 240) / 2)), 375, 240, 60, '#f472b6', 'RACK-D [STAGING & BUFFER]', 'LEVEL 0: SWEEPER AISLE PERIMETER', true);
+        }
+
+        function drawRack(x, y, w, h, accentColor, label, tierLevel, light = true) {
+            const isUpper = (y < 250);
+            const timeSec = Date.now() / 1000.0;
+            const halfW = Math.floor(w / 2);
+
+            // 1. Soft Outer Ambient Drop Shadow for 3D depth
+            ctx.save();
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.08)';
+            ctx.beginPath();
+            ctx.roundRect(x + 2, y + 4, w - 4, h + 2, 4);
+            ctx.fill();
+            ctx.restore();
+
+            // 2. Heavy-Duty Industrial Rack Backing (Deep structural shadow cavity)
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 1.2;
+            ctx.strokeRect(x, y, w, h);
+
+            // 3. Structural Bay X-Bracing (Heavy diagonal cross-trusses behind cargo)
+            ctx.save();
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(x + 8, y + 6); ctx.lineTo(x + halfW - 4, y + h - 8);
+            ctx.moveTo(x + halfW - 4, y + 6); ctx.lineTo(x + 8, y + h - 8);
+            ctx.moveTo(x + halfW + 4, y + 6); ctx.lineTo(x + w - 8, y + h - 8);
+            ctx.moveTo(x + w - 8, y + 6); ctx.lineTo(x + halfW + 4, y + h - 8);
+            ctx.stroke();
+
+            // Center Truss Gusset Rivet Plates
+            ctx.fillStyle = '#94a3b8';
+            ctx.beginPath();
+            ctx.arc(x + Math.floor(halfW / 2), y + Math.floor(h / 2), 2.2, 0, Math.PI * 2);
+            ctx.arc(x + halfW + Math.floor(halfW / 2), y + Math.floor(h / 2), 2.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // 4. Wire Mesh Safety Decking (Fine industrial grid)
+            ctx.save();
+            ctx.strokeStyle = 'rgba(203, 213, 225, 0.4)';
+            ctx.lineWidth = 0.6;
+            for (let gx = x + 12; gx < x + w - 12; gx += 8) {
+                ctx.beginPath();
+                ctx.moveTo(gx, y + 8);
+                ctx.lineTo(gx, y + 26);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // 5. 4 Individual Pallet Bays with Realistic Industrial Cargo Diversity
+            const numBays = 4;
+            const baySpacing = (w - 20) / numBays;
+            const palletW = 46;
+
+            for (let i = 0; i < numBays; i++) {
+                const px = x + 10 + (i * baySpacing);
+                const palletY = y + 20;
+                const cargoH = 16;
+                const cargoY = palletY - cargoH;
+                const isDroneHoveringThisBay = isUpper && Math.abs(drone.x - (px + palletW / 2)) < 22;
+
+                // --- Wooden Euro-Pallet (EPAL / EUR Standard) ---
+                ctx.fillStyle = '#b45309';
+                ctx.fillRect(px, palletY, palletW, 3.5);
+                ctx.fillStyle = '#78350f';
+                ctx.fillRect(px, palletY + 3.5, palletW, 1.2);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                ctx.fillRect(px + 14, palletY, 1, 3.5);
+                ctx.fillRect(px + 29, palletY, 1, 3.5);
+
+                // 3 Solid Composite Spacer Blocks & Fork Entry Cavities
+                ctx.fillStyle = '#92400e';
+                ctx.fillRect(px + 1, palletY + 4.7, 7, 3.2);
+                ctx.fillRect(px + Math.floor(palletW / 2) - 4, palletY + 4.7, 8, 3.2);
+                ctx.fillRect(px + palletW - 8, palletY + 4.7, 7, 3.2);
+                ctx.fillStyle = '#d1d5db';
+                ctx.fillRect(px + 4, palletY + 6, 1, 1);
+                ctx.fillRect(px + Math.floor(palletW / 2), palletY + 6, 1, 1);
+                ctx.fillRect(px + palletW - 5, palletY + 6, 1, 1);
+
+                // Bottom Skid Runners
+                ctx.fillStyle = '#b45309';
+                ctx.fillRect(px + 1, palletY + 7.9, 7, 1.5);
+                ctx.fillRect(px + Math.floor(palletW / 2) - 4, palletY + 7.9, 8, 1.5);
+                ctx.fillRect(px + palletW - 8, palletY + 7.9, 7, 1.5);
+
+                // --- Diverse Industrial Cargo Types per Bay ---
+                if (i === 0) {
+                    // Bay 0: Stacked Kraft Corrugated Shipping Cartons
+                    ctx.fillStyle = '#d97706';
+                    ctx.fillRect(px + 2, cargoY + 6, palletW - 4, 10);
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.fillRect(px + 2, cargoY + 10, palletW - 4, 2);
+                    ctx.fillStyle = '#dc2626';
+                    ctx.font = 'bold 5.5px sans-serif';
+                    ctx.fillText('FRAGILE', px + 4, cargoY + 9.5);
+
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                    ctx.fillRect(px + 6, cargoY + 5.5, palletW - 12, 1);
+                    ctx.fillStyle = '#b45309';
+                    ctx.fillRect(px + 6, cargoY, palletW - 12, 6);
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.fillRect(px + 6, cargoY + 3, palletW - 12, 1.5);
+
+                    ctx.fillStyle = '#0f172a';
+                    ctx.font = 'bold 7px sans-serif';
+                    ctx.fillText('↑↑', px + 5, cargoY + 14.5);
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(px + 20, cargoY + 7, 20, 8);
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillRect(px + 22, cargoY + 8, 1.5, 5);
+                    ctx.fillRect(px + 24.5, cargoY + 8, 2.5, 5);
+                    ctx.fillRect(px + 28, cargoY + 8, 1, 5);
+                    ctx.fillRect(px + 30, cargoY + 8, 2, 5);
+                    ctx.fillRect(px + 33, cargoY + 8, 1.5, 5);
+                    ctx.fillRect(px + 36, cargoY + 8, 2, 5);
+                    ctx.font = '4.5px monospace';
+                    ctx.fillText('SKU-4821', px + 21, cargoY + 14.2);
+
+                } else if (i === 1) {
+                    // Bay 1: Industrial Molded Polymer KLT Crate (Automotive Euro-Tote)
+                    const crateColor = accentColor;
+                    ctx.fillStyle = crateColor;
+                    ctx.beginPath();
+                    ctx.roundRect(px + 3, cargoY + 2, palletW - 6, 14, 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(px + 6, cargoY + 4, palletW - 12, 10);
+                    ctx.beginPath();
+                    ctx.moveTo(px + Math.floor(palletW / 2), cargoY + 4);
+                    ctx.lineTo(px + Math.floor(palletW / 2), cargoY + 14);
+                    ctx.moveTo(px + 13, cargoY + 4); ctx.lineTo(px + 13, cargoY + 14);
+                    ctx.moveTo(px + palletW - 13, cargoY + 4); ctx.lineTo(px + palletW - 13, cargoY + 14);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#cbd5e1';
+                    ctx.fillRect(px + Math.floor(palletW / 2) - 4, cargoY + 6, 8, 2.5);
+
+                    const rfidX = px + palletW - 9;
+                    const rfidY = cargoY + 6;
+                    const rfidWave = (Date.now() / 200) % 4;
+                    ctx.save();
+                    ctx.strokeStyle = `rgba(6, 182, 212, ${Math.max(0, 0.7 - rfidWave * 0.15)})`;
+                    ctx.lineWidth = 0.8;
+                    ctx.beginPath();
+                    ctx.arc(rfidX, rfidY, 2.5 + rfidWave, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#06b6d4';
+                    ctx.shadowColor = '#06b6d4';
+                    ctx.shadowBlur = 5;
+                    ctx.beginPath();
+                    ctx.arc(rfidX, rfidY, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+
+                } else if (i === 2) {
+                    // Bay 2: Palletized UN Steel Chemical Drums
+                    const drumW = 18;
+                    for (let d = 0; d < 2; d++) {
+                        const dx = px + 4 + d * 20;
+                        const grad = ctx.createLinearGradient(dx, cargoY, dx + drumW, cargoY);
+                        grad.addColorStop(0, '#475569');
+                        grad.addColorStop(0.35, '#cbd5e1');
+                        grad.addColorStop(0.65, '#94a3b8');
+                        grad.addColorStop(1, '#334155');
+                        ctx.fillStyle = grad;
+                        ctx.beginPath();
+                        ctx.roundRect(dx, cargoY + 1, drumW, 15, 2);
+                        ctx.fill();
+
+                        ctx.strokeStyle = '#e2e8f0';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(dx, cargoY + 4); ctx.lineTo(dx + drumW, cargoY + 4);
+                        ctx.moveTo(dx, cargoY + 8); ctx.lineTo(dx + drumW, cargoY + 8);
+                        ctx.moveTo(dx, cargoY + 12); ctx.lineTo(dx + drumW, cargoY + 12);
+                        ctx.stroke();
+
+                        ctx.fillStyle = '#0f172a';
+                        ctx.fillRect(dx + 3, cargoY + 1, 2.5, 1.2);
+                        ctx.fillRect(dx + 11, cargoY + 1, 3.5, 1.2);
+                    }
+
+                    // UN Hazard Placard
+                    ctx.save();
+                    ctx.translate(px + 22, cargoY + 8.5);
+                    ctx.rotate(Math.PI / 4);
+                    ctx.fillStyle = '#eab308';
+                    ctx.fillRect(-3.5, -3.5, 7, 7);
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 0.6;
+                    ctx.strokeRect(-3.5, -3.5, 7, 7);
+                    ctx.fillStyle = '#0f172a';
+                    ctx.beginPath(); ctx.arc(0, 0, 1.2, 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+
+                } else {
+                    // Bay 3: Translucent Stretch-Wrapped Pallet Load
+                    ctx.fillStyle = '#0284c7';
+                    ctx.fillRect(px + 3, cargoY + 1, palletW - 6, 15);
+
+                    const wrapGrad = ctx.createLinearGradient(px, cargoY, px + palletW, cargoY + 15);
+                    wrapGrad.addColorStop(0, 'rgba(255,255,255,0.06)');
+                    wrapGrad.addColorStop(0.3, 'rgba(255,255,255,0.38)');
+                    wrapGrad.addColorStop(0.5, 'rgba(255,255,255,0.08)');
+                    wrapGrad.addColorStop(0.8, 'rgba(255,255,255,0.32)');
+                    wrapGrad.addColorStop(1, 'rgba(255,255,255,0.1)');
+                    ctx.fillStyle = wrapGrad;
+                    ctx.fillRect(px + 3, cargoY + 1, palletW - 6, 15);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                    ctx.lineWidth = 0.8;
+                    ctx.strokeRect(px + 3, cargoY + 1, palletW - 6, 15);
+
+                    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+                    ctx.lineWidth = 0.8;
+                    ctx.beginPath();
+                    ctx.moveTo(px + 3, cargoY + 5); ctx.lineTo(px + palletW - 3, cargoY + 5);
+                    ctx.moveTo(px + 3, cargoY + 10); ctx.lineTo(px + palletW - 3, cargoY + 10);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(px + 6, cargoY + 5, 16, 8);
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillRect(px + 8, cargoY + 6, 3, 3);
+                    ctx.fillRect(px + 12, cargoY + 6, 2, 6);
+                    ctx.fillRect(px + 16, cargoY + 6, 3, 6);
+                    ctx.font = '4.5px monospace';
+                    ctx.fillText('OUTBOUND', px + 7, cargoY + 12);
+                }
+
+                // --- Smart IoT Micro-LED Sensor & Active Drone Scan Highlight ---
+                const ledColors = ['#10b981', '#06b6d4', '#f59e0b', '#10b981'];
+                const ledX = px + Math.floor(palletW / 2);
+                const ledY = y + 3;
+                ctx.save();
+                if (isDroneHoveringThisBay) {
+                    const scanLineY = cargoY + ((Date.now() / 25) % 17);
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 1.6;
+                    ctx.shadowColor = '#38bdf8';
+                    ctx.shadowBlur = 7;
+                    ctx.beginPath();
+                    ctx.moveTo(px + 2, scanLineY);
+                    ctx.lineTo(px + palletW - 2, scanLineY);
+                    ctx.stroke();
+
+                    const cl = 4;
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 1.4;
+                    ctx.beginPath(); ctx.moveTo(px + 1, cargoY + cl); ctx.lineTo(px + 1, cargoY); ctx.lineTo(px + 1 + cl, cargoY); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(px + palletW - 1 - cl, cargoY); ctx.lineTo(px + palletW - 1, cargoY); ctx.lineTo(px + palletW - 1, cargoY + cl); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(px + 1, cargoY + 18 - cl); ctx.lineTo(px + 1, cargoY + 18); ctx.lineTo(px + 1 + cl, cargoY + 18); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(px + palletW - 1 - cl, cargoY + 18); ctx.lineTo(px + palletW - 1, cargoY + 18); ctx.lineTo(px + palletW - 1, cargoY + 18 - cl); ctx.stroke();
+
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.shadowColor = '#38bdf8';
+                    ctx.shadowBlur = 9;
+                    ctx.beginPath();
+                    ctx.arc(ledX, ledY, 3.2, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.font = 'bold 6.5px monospace';
+                    ctx.fillText('⚡ LASER SCAN LOCK', px + 2, cargoY - 3);
+                } else {
+                    ctx.fillStyle = ledColors[i];
+                    ctx.shadowColor = ledColors[i];
+                    ctx.shadowBlur = 4;
+                    ctx.beginPath();
+                    ctx.arc(ledX, ledY, 1.8, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            // 6. Safety Orange Heavy-Duty Shelf Load Beams with 3D Bevel & Locking Pins
+            const beamY1 = y + 28;
+            ctx.fillStyle = '#ea580c';
+            ctx.fillRect(x, beamY1, w, 4);
+            ctx.fillStyle = '#fb923c';
+            ctx.fillRect(x, beamY1, w, 1);
+            ctx.fillStyle = '#9a3412';
+            ctx.fillRect(x, beamY1 + 3, w, 1);
+
+            const beamY2 = y + h - 16;
+            ctx.fillStyle = '#ea580c';
+            ctx.fillRect(x, beamY2, w, 4);
+            ctx.fillStyle = '#fb923c';
+            ctx.fillRect(x, beamY2, w, 1);
+            ctx.fillStyle = '#9a3412';
+            ctx.fillRect(x, beamY2 + 3, w, 1);
+
+            // Laser-etched Bay Locator IDs along the orange beam
+            const bayLetters = ['01', '02', '03', '04'];
+            const rackPrefix = label.split(' ')[0].replace('RACK-', '');
+            for (let b = 0; b < 4; b++) {
+                const bx = x + 12 + (b * baySpacing);
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(bx + 4, beamY1 + 1, 18, 2.8);
+                ctx.fillStyle = '#fed7aa';
+                ctx.font = 'bold 6px monospace';
+                ctx.fillText(`${rackPrefix}-${bayLetters[b]}`, bx + 5, beamY1 + 3.2);
+            }
+
+            // 7. Heavy Structural Steel Upright Columns (Left, Center, Right)
+            const postWidth = 7;
+            const postPositions = [x, x + Math.floor(w / 2) - 3, x + w - postWidth];
+            postPositions.forEach(px => {
+                const postGrad = ctx.createLinearGradient(px, y, px + postWidth, y);
+                postGrad.addColorStop(0, '#334155');
+                postGrad.addColorStop(0.5, '#64748b');
+                postGrad.addColorStop(1, '#1e293b');
+                ctx.fillStyle = postGrad;
+                ctx.fillRect(px, y, postWidth, h);
+
+                ctx.fillStyle = '#e2e8f0';
+                for (let py = y + 4; py < y + h - 6; py += 7) {
+                    ctx.fillRect(px + 2, py, 3, 3);
+                }
+
+                ctx.fillStyle = '#fbbf24';
+                ctx.beginPath();
+                ctx.arc(px + 3.5, beamY1 + 2, 1.8, 0, Math.PI * 2);
+                ctx.arc(px + 3.5, beamY2 + 2, 1.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(px - 1.5, y + h - 3, postWidth + 3, 3);
+                ctx.fillStyle = '#e2e8f0';
+                ctx.fillRect(px - 0.5, y + h - 2, 1.5, 1.5);
+                ctx.fillRect(px + postWidth, y + h - 2, 1.5, 1.5);
+            });
+
+            // 8. Lower Rack Heavy-Duty Corner Crash Guards
+            if (!isUpper) {
+                drawCornerGuard(x - 3, y + h - 16, light);
+                drawCornerGuard(x + w - 4, y + h - 16, light);
+            }
+
+            // 9. Upper Rack Optical Target Barcode Fiducials
+            if (isUpper) {
+                const fiducialX = x + Math.floor(w / 2) - 18;
+                const fiducialY = y - 7;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(fiducialX, fiducialY, 36, 6);
+                ctx.strokeStyle = '#0284c7';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(fiducialX, fiducialY, 36, 6);
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(fiducialX + 2, fiducialY + 1, 4, 4);
+                ctx.fillRect(fiducialX + 8, fiducialY + 1, 2, 4);
+                ctx.fillRect(fiducialX + 12, fiducialY + 1, 3, 4);
+                ctx.fillRect(fiducialX + 17, fiducialY + 1, 2, 4);
+                ctx.fillRect(fiducialX + 21, fiducialY + 1, 4, 4);
+                ctx.fillRect(fiducialX + 28, fiducialY + 1, 6, 4);
+
+                if (Math.abs(drone.x - (x + halfW)) < 55) {
+                    ctx.save();
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 1.5;
+                    ctx.shadowColor = '#38bdf8';
+                    ctx.shadowBlur = 8;
+                    ctx.strokeRect(fiducialX - 2, fiducialY - 2, 40, 10);
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.font = 'bold 7px monospace';
+                    ctx.fillText('⚡ OPTICAL SCAN LOCK: 99.8%', fiducialX - 18, fiducialY - 4);
+                    ctx.restore();
+                }
+            }
+
+            // 10. Floating Digital Twin HUD Pill Badge
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
+            ctx.beginPath();
+            ctx.roundRect(x + 8, y + h - 12, w - 16, 10, 3);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(203, 213, 225, 0.85)';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+
+            const pulseAlpha = 0.6 + 0.4 * Math.sin(timeSec * 4);
+            ctx.fillStyle = `rgba(16, 185, 129, ${pulseAlpha})`;
+            ctx.beginPath();
+            ctx.arc(x + 15, y + h - 7, 2.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#0284c7';
+            ctx.font = 'bold 7.5px monospace';
+            ctx.fillText(label, x + 22, y + h - 4.5);
+
+            ctx.fillStyle = '#64748b';
+            ctx.font = '6.5px monospace';
+            ctx.fillText(`CAP: 98.4% • ${tierLevel.split(':')[0]}`, x + w - 95, y + h - 4.5);
+            ctx.restore();
+        }
+
+        function drawCornerGuard(gx, gy, light = true) {
+            const gw = 7, gh = 15;
+            ctx.save();
+            ctx.fillStyle = '#eab308';
+            ctx.fillRect(gx, gy, gw, gh);
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(gx, gy, gw, gh);
+
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(gx, gy + 3); ctx.lineTo(gx + gw, gy + 8);
+            ctx.moveTo(gx, gy + 8); ctx.lineTo(gx + gw, gy + 13);
+            ctx.stroke();
+            ctx.restore();
         }
 
         function drawCloudHub() {
@@ -970,7 +1376,7 @@ ARENA_HTML = """
 
         function update() {
             if (isRunning) {
-                // AGV logic
+                // 1. AGV logic
                 if (humanHazard) {
                     const dist = humanPos.x - agv.x;
                     if (dist > 75) {
@@ -979,7 +1385,6 @@ ARENA_HTML = """
                     } else if (dist > 0) {
                         agv.status = 'STOPPED';
                     } else {
-                        // Safety fallback: ensure robot never stops past the hazard
                         agv.x = humanPos.x - 75;
                         agv.status = 'STOPPED';
                     }
@@ -989,17 +1394,34 @@ ARENA_HTML = """
                     if (agv.x > canvas.width - 60) agv.x = 40;
                 }
 
-                // Drone hovering along inspection corridor
-                drone.angle += 0.03;
-                drone.x = 280 + Math.sin(drone.angle) * 110;
-                drone.y = 195 + Math.cos(drone.angle) * 6;
+                // 2. Multirotor Drone Quadcopter Flight & Shelf Inspection
+                const inspectionBays = [65, 125, 185, 235, canvas.width - 235, canvas.width - 185, canvas.width - 125, canvas.width - 65];
+                const targetBayX = inspectionBays[drone.currentBayIndex % inspectionBays.length];
+                const ddx = targetBayX - drone.x;
+                if (Math.abs(ddx) > 6) {
+                    const moveDir = ddx > 0 ? 1 : -1;
+                    drone.x += moveDir * drone.speed;
+                    drone.tilt = drone.tilt * 0.85 + (moveDir * 0.14) * 0.15;
+                    drone.bayHoverTimer = 0;
+                } else {
+                    drone.tilt = drone.tilt * 0.8;
+                    drone.bayHoverTimer++;
+                    if (drone.bayHoverTimer > 80) {
+                        drone.currentBayIndex = (drone.currentBayIndex + 1) % inspectionBays.length;
+                        drone.scannedSKU = `SKU-${1000 + Math.floor(Math.random() * 8999)} [VERIFIED]`;
+                        drone.bayHoverTimer = 0;
+                    }
+                }
+                drone.y = 205 + Math.sin(Date.now() * 0.004) * 4;
+                drone.rotorAngle = (drone.rotorAngle + 0.45) % (Math.PI * 2);
 
-                // Sweeper back and forth along bottom corridor
-                sweeper.x += 1.2 * sweeper.dir;
-                if (sweeper.x > canvas.width - 240) sweeper.dir = -1;
-                if (sweeper.x < 40) sweeper.dir = 1;
+                // 3. Sweeper back and forth along maintenance apron
+                sweeper.x += sweeper.dir * sweeper.speed;
+                if (sweeper.dir > 0 && sweeper.x > canvas.width - 290) sweeper.dir = -1;
+                if (sweeper.dir < 0 && sweeper.x < 70) sweeper.dir = 1;
+                sweeper.brushAngle = (sweeper.brushAngle + 0.22) % (Math.PI * 2);
 
-                // Telemetry packets
+                // 4. Telemetry packets
                 packets.forEach(p => { p.progress += 0.04; });
                 packets = packets.filter(p => p.progress < 1.0);
             }
@@ -1009,8 +1431,9 @@ ARENA_HTML = """
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawWarehouse();
 
-            // Draw Human if hazard
+            // 1. Draw Human if hazard active
             if (humanHazard) {
+                ctx.save();
                 ctx.fillStyle = '#ef4444';
                 ctx.beginPath(); ctx.arc(humanPos.x, humanPos.y - 14, 8, 0, Math.PI * 2); ctx.fill();
                 ctx.fillRect(humanPos.x - 6, humanPos.y - 6, 12, 22);
@@ -1019,50 +1442,196 @@ ARENA_HTML = """
 
                 ctx.fillStyle = '#dc2626';
                 ctx.font = 'bold 10px sans-serif';
-                ctx.fillText("HAZARD", humanPos.x - 20, humanPos.y - 32);
+                ctx.fillText("HAZARD INTRUSION", humanPos.x - 30, humanPos.y - 32);
+                ctx.restore();
             }
 
-            // AGV Robot
-            ctx.fillStyle = agv.status === 'STOPPED' ? '#dc2626' : '#b91c1c';
-            ctx.fillRect(agv.x - 22, agv.y - 15, 44, 30);
-            ctx.strokeStyle = '#991b1b';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(agv.x - 22, agv.y - 15, 44, 30);
-
-            // Light cone
-            ctx.fillStyle = agv.status === 'STOPPED' ? 'rgba(220, 38, 38, 0.22)' : 'rgba(217, 119, 6, 0.18)';
+            // 2. Draw AGV Robot with Industrial Chassis & LiDAR
+            const isStopped = (agv.status === 'STOPPED');
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
             ctx.beginPath();
-            ctx.moveTo(agv.x + 22, agv.y);
-            ctx.lineTo(agv.x + 100, agv.y - 35);
-            ctx.lineTo(agv.x + 100, agv.y + 35);
+            ctx.roundRect(agv.x - 22, agv.y - 13, 44, 32, 6);
+            ctx.fill();
+
+            // Safety Laser Illumination Beam
+            const beamW = isStopped ? 80 : 130;
+            const beamColor = isStopped ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.18)';
+            const beamGrad = ctx.createLinearGradient(agv.x + 22, agv.y, agv.x + 22 + beamW, agv.y);
+            beamGrad.addColorStop(0, beamColor);
+            beamGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+            ctx.fillStyle = beamGrad;
+            ctx.beginPath();
+            ctx.moveTo(agv.x + 22, agv.y - 8);
+            ctx.lineTo(agv.x + 22 + beamW, agv.y - 32);
+            ctx.lineTo(agv.x + 22 + beamW, agv.y + 32);
+            ctx.lineTo(agv.x + 22, agv.y + 8);
             ctx.closePath();
             ctx.fill();
 
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 9px sans-serif';
-            ctx.fillText(agv.id, agv.x - 18, agv.y + 3);
+            // Chassis
+            ctx.fillStyle = isStopped ? '#dc2626' : '#b91c1c';
+            ctx.beginPath();
+            ctx.roundRect(agv.x - 22, agv.y - 15, 44, 30, 6);
+            ctx.fill();
+            ctx.strokeStyle = isStopped ? '#ef4444' : '#991b1b';
+            ctx.lineWidth = 1.8;
+            ctx.stroke();
 
-            // Drone
+            // Front Bumper Chevron Warning Stripes
+            ctx.fillStyle = '#eab308';
+            ctx.fillRect(agv.x + 18, agv.y - 13, 4, 26);
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(agv.x + 18, agv.y - 9, 4, 3);
+            ctx.fillRect(agv.x + 18, agv.y - 1, 4, 3);
+            ctx.fillRect(agv.x + 18, agv.y + 7, 4, 3);
+
+            // Spinning LiDAR Turret
+            ctx.fillStyle = '#0f172a';
+            ctx.beginPath(); ctx.arc(agv.x + 8, agv.y, 6, 0, Math.PI * 2); ctx.fill();
+            const lidarAngle = (Date.now() / 120) % (Math.PI * 2);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(agv.x + 8, agv.y);
+            ctx.lineTo(agv.x + 8 + Math.cos(lidarAngle) * 5.5, agv.y + Math.sin(lidarAngle) * 5.5);
+            ctx.stroke();
+
+            // Label
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 8.5px monospace';
+            ctx.fillText(agv.id, agv.x - 19, agv.y + 3.5);
+            ctx.restore();
+
+            // 3. Draw Multirotor Drone Quadcopter
+            ctx.save();
+            ctx.fillStyle = 'rgba(0,0,0,0.12)';
+            ctx.beginPath();
+            ctx.ellipse(drone.x, drone.y + 42, 22, 7, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Downward Conical Optical Scan Beam over Rack
+            const dgrad = ctx.createLinearGradient(drone.x, drone.y + 6, drone.x, drone.y - 45);
+            dgrad.addColorStop(0, 'rgba(14, 165, 233, 0.45)');
+            dgrad.addColorStop(1, 'rgba(14, 165, 233, 0.0)');
+            ctx.fillStyle = dgrad;
+            ctx.beginPath();
+            ctx.moveTo(drone.x, drone.y + 4);
+            ctx.lineTo(drone.x - 32, drone.y - 45);
+            ctx.lineTo(drone.x + 32, drone.y - 45);
+            ctx.closePath();
+            ctx.fill();
+
+            // Barcode scan reticle over bay
+            if (drone.bayHoverTimer > 10) {
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(drone.x - 18, drone.y - 50, 36, 18);
+                ctx.fillStyle = '#10b981';
+                ctx.font = 'bold 7.5px monospace';
+                ctx.fillText(drone.scannedSKU, drone.x - 42, drone.y - 54);
+            }
+
+            // Quadcopter Banking Tilt Rotation
+            ctx.translate(drone.x, drone.y);
+            ctx.rotate(drone.tilt);
+
+            // Carbon-fiber X-Arms
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(-16, -10); ctx.lineTo(16, 10);
+            ctx.moveTo(16, -10); ctx.lineTo(-16, 10);
+            ctx.stroke();
+
+            // 4 Motor Pods & High-Speed Spinning Rotor Blades
+            const motors = [
+                { x: -16, y: -10 },
+                { x: 16, y: -10 },
+                { x: -16, y: 10 },
+                { x: 16, y: 10 }
+            ];
+
+            motors.forEach((m, idx) => {
+                ctx.fillStyle = '#0f172a';
+                ctx.beginPath(); ctx.arc(m.x, m.y, 3, 0, Math.PI * 2); ctx.fill();
+
+                ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+                ctx.beginPath();
+                ctx.ellipse(m.x, m.y, 12, 4.5, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = '#0284c7';
+                ctx.lineWidth = 1.2;
+                const angle = drone.rotorAngle + idx;
+                ctx.beginPath();
+                ctx.moveTo(m.x - Math.cos(angle) * 11, m.y - Math.sin(angle) * 3.5);
+                ctx.lineTo(m.x + Math.cos(angle) * 11, m.y + Math.sin(angle) * 3.5);
+                ctx.stroke();
+            });
+
+            // Central Aerodynamic Pod
             ctx.fillStyle = '#0284c7';
-            ctx.fillRect(drone.x - 12, drone.y - 12, 24, 24);
-            ctx.strokeStyle = '#0369a1';
-            ctx.strokeRect(drone.x - 12, drone.y - 12, 24, 24);
-            // Drone beam
-            ctx.fillStyle = 'rgba(2, 132, 199, 0.18)';
             ctx.beginPath();
-            ctx.moveTo(drone.x, drone.y + 12);
-            ctx.lineTo(drone.x - 22, drone.y + 36);
-            ctx.lineTo(drone.x + 22, drone.y + 36);
-            ctx.closePath();
+            ctx.roundRect(-10, -8, 20, 16, 4);
             ctx.fill();
+            ctx.strokeStyle = '#0369a1';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
 
-            // Sweeper
+            // Blinking Navigational Beacon
+            ctx.fillStyle = (Date.now() % 400 < 200) ? '#38bdf8' : '#ffffff';
+            ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+
+            // Drone ID
+            ctx.fillStyle = '#0369a1';
+            ctx.font = 'bold 8px monospace';
+            ctx.fillText("DRONE-07", -20, -13);
+            ctx.restore();
+
+            // 4. Draw Sweeper Cleaning Robot
+            ctx.save();
+            const brushOffset = sweeper.dir * 15;
+            const b1 = { x: sweeper.x + brushOffset, y: sweeper.y - 10 };
+            const b2 = { x: sweeper.x + brushOffset, y: sweeper.y + 10 };
+
+            [b1, b2].forEach((b, idx) => {
+                ctx.fillStyle = 'rgba(5, 150, 105, 0.3)';
+                ctx.beginPath(); ctx.arc(b.x, b.y, 9, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#047857';
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+
+                const bAngle = sweeper.brushAngle + idx * Math.PI;
+                for (let i = 0; i < 4; i++) {
+                    const rad = bAngle + (i * Math.PI / 2);
+                    ctx.beginPath();
+                    ctx.moveTo(b.x, b.y);
+                    ctx.lineTo(b.x + Math.cos(rad) * 8, b.y + Math.sin(rad) * 8);
+                    ctx.stroke();
+                }
+            });
+
             ctx.fillStyle = '#059669';
             ctx.beginPath(); ctx.arc(sweeper.x, sweeper.y, 14, 0, Math.PI * 2); ctx.fill();
             ctx.strokeStyle = '#047857';
+            ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Packets in flight
+            ctx.fillStyle = '#064e3b';
+            ctx.beginPath();
+            ctx.arc(sweeper.x, sweeper.y, 14, sweeper.dir > 0 ? -Math.PI / 3 : Math.PI * 2 / 3, sweeper.dir > 0 ? Math.PI / 3 : Math.PI * 4 / 3);
+            ctx.fill();
+
+            ctx.fillStyle = (Date.now() % 500 < 250) ? '#f59e0b' : '#d97706';
+            ctx.beginPath(); ctx.arc(sweeper.x, sweeper.y, 4.5, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = '#047857';
+            ctx.font = 'bold 8.5px monospace';
+            ctx.fillText("SWEEPER-12 [LEVEL 0 SANITIZER]", sweeper.x - 65, sweeper.y + 24);
+            ctx.restore();
+
+            // 5. Packets in flight
             packets.forEach(p => {
                 const curX = p.fromX + (p.toX - p.fromX) * p.progress;
                 const curY = p.fromY + (p.toY - p.fromY) * p.progress;
