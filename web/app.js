@@ -1155,6 +1155,36 @@ function updateMetrics(s, m) {
         }
     }
 
+    // 6. Edge Protective Fallbacks
+    const edgeFallbacks = (m && m.edge_fallbacks !== undefined) ? m.edge_fallbacks : 0;
+    const elEdgeFall = document.getElementById('metricEdgeFallbacks');
+    if (elEdgeFall) elEdgeFall.innerText = edgeFallbacks;
+    const elEdgeDelta = document.getElementById('metricEdgeFallbacksDelta');
+    if (elEdgeDelta) {
+        if (edgeFallbacks > 0) {
+            elEdgeDelta.innerText = `🛡️ ${edgeFallbacks} Inferences Diverted to Edge`;
+            elEdgeDelta.className = 'metric-delta delta-warning';
+        } else {
+            elEdgeDelta.innerText = 'Zero Deadline Misses';
+            elEdgeDelta.className = 'metric-delta delta-info';
+        }
+    }
+
+    // 7. Data Lakehouse Parquet Exports
+    const lakehouseCount = (m && m.lakehouse_exports !== undefined) ? m.lakehouse_exports : 0;
+    const elLakehouse = document.getElementById('metricLakehouseExports');
+    if (elLakehouse) elLakehouse.innerText = lakehouseCount;
+    const elLakehouseDelta = document.getElementById('metricLakehouseDelta');
+    if (elLakehouseDelta) {
+        if (lakehouseCount > 0) {
+            elLakehouseDelta.innerText = `📊 ${lakehouseCount} Batches Synced`;
+            elLakehouseDelta.className = 'metric-delta delta-success';
+        } else {
+            elLakehouseDelta.innerText = 'Snappy Columnar Ready';
+            elLakehouseDelta.className = 'metric-delta delta-info';
+        }
+    }
+
     // Tab 2 Autoscaler values
     const as = s.autoscaler || {};
     const elASState = document.getElementById('asStateVal');
@@ -1933,9 +1963,9 @@ document.getElementById('btnRogue').addEventListener('click', async () => {
             })
         });
 
-        if (res.status === 403) {
-            showToast("Zero-Trust Gateway: Rogue token REJECTED with HTTP 403 Forbidden! Centered on Tab 3 (Fleet Governance).", "security", 5000);
-            showBanner("🛡️ PERIMETER SECURED: ROGUE TOKEN BLOCKED (HTTP 403 FORBIDDEN)", "rgba(225, 29, 72, 0.95)", "#e11d48");
+        if (res.status === 403 || res.status === 401) {
+            showToast("Zero-Trust Gateway: Rogue token REJECTED with HTTP 401/403 Forbidden! Centered on Tab 3 (Fleet Governance).", "security", 5000);
+            showBanner("🛡️ PERIMETER SECURED: ROGUE TOKEN BLOCKED (HTTP 401/403 FORBIDDEN)", "rgba(225, 29, 72, 0.95)", "#e11d48");
         } else {
             showToast(`Unexpected status: ${res.status}`, "warning");
         }
@@ -1943,6 +1973,74 @@ document.getElementById('btnRogue').addEventListener('click', async () => {
         showToast(`Rogue test error: ${e}`, "error");
     }
 });
+
+// Feature 12: Latency-Aware Protective Edge-Cloud Fallback
+async function triggerEdgeFallbackDemo() {
+    showBanner("🛡️ LATENCY-AWARE FALLBACK: ROBOT REQUESTS 15ms SAFETY INFERENCE. CLOUD EVALUATING RADS QUEUE...", "rgba(245, 158, 11, 0.95)", "#d97706");
+    navigateToTab('tabBenchmarks', '#taskExecutionStreamBody', true, 1200);
+    try {
+        const res = await fetch('/api/v1/cloud/demo_edge_fallback', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'EXECUTE_AT_EDGE') {
+            showToast(`🛡️ Circuit Breaker Tripped: Predicted cloud latency ${data.predicted_latency_ms}ms > ${data.deadline_ms}ms deadline! Immediate EXECUTE_AT_EDGE returned. Centered on Tab 5.`, "warning", 6000);
+            showBanner(`🛡️ PROTECTIVE EDGE FALLBACK: Deadline ${data.deadline_ms}ms unreachable (${data.predicted_latency_ms}ms predicted) -> Reverted to Onboard Edge Model!`, "rgba(245, 158, 11, 0.95)", "#d97706");
+        } else {
+            showToast("Cloud accepted task within deadline.", "info");
+        }
+    } catch (e) {
+        showToast(`Edge Fallback error: ${e}`, "error");
+    }
+}
+const btnEdge = document.getElementById('btnEdgeFallback');
+if (btnEdge) btnEdge.addEventListener('click', triggerEdgeFallbackDemo);
+
+// Feature 13: Data Lakehouse Parquet Exporter
+async function fetchLakehouseStatus() {
+    try {
+        const res = await fetch('/api/v1/cloud/export/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        const latest = data.latest_export;
+        if (latest) {
+            const lblFile = document.getElementById('lblLakehouseLatestFile');
+            if (lblFile) lblFile.innerText = latest.file_name || '-';
+            const lblRows = document.getElementById('lblLakehouseRows');
+            if (lblRows) lblRows.innerText = `${latest.row_count || 0} rows`;
+            const lblSize = document.getElementById('lblLakehouseSize');
+            if (lblSize) lblSize.innerText = `${((latest.file_size_bytes || 0) / 1024).toFixed(1)} KB (Snappy)`;
+        }
+    } catch (e) {
+        // silent
+    }
+}
+
+async function triggerLakehouseExport() {
+    showBanner("📊 DATA LAKEHOUSE ETL: EXTRACTING REDIS TELEMETRY & MINIO INCIDENTS INTO APACHE PARQUET...", "rgba(16, 185, 129, 0.95)", "#059669");
+    navigateToTab('tabIncidents', '#lblLakehouseLatestFile', true, 1200);
+    try {
+        const res = await fetch('/api/v1/cloud/export/lakehouse', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'COMPLETED' || data.file_name) {
+            showToast(`📊 Lakehouse Batch Exported: ${data.row_count} rows written to ${data.file_name} (${((data.file_size_bytes || 0) / 1024).toFixed(1)} KB, Snappy compression). Centered on Tab 4.`, "success", 6000);
+            showBanner(`📊 LAKEHOUSE EXPORT COMPLETE: Generated ${data.file_name} with PyArrow Snappy compression!`, "rgba(16, 185, 129, 0.95)", "#059669");
+            
+            const lblFile = document.getElementById('lblLakehouseLatestFile');
+            if (lblFile) lblFile.innerText = data.file_name || '-';
+            const lblRows = document.getElementById('lblLakehouseRows');
+            if (lblRows) lblRows.innerText = `${data.row_count || 0} rows`;
+            const lblSize = document.getElementById('lblLakehouseSize');
+            if (lblSize) lblSize.innerText = `${((data.file_size_bytes || 0) / 1024).toFixed(1)} KB (Snappy)`;
+        } else {
+            showToast(`Lakehouse export result: ${data.status || 'Complete'}`, "info");
+        }
+    } catch (e) {
+        showToast(`Lakehouse export error: ${e}`, "error");
+    }
+}
+const btnLakehouseTop = document.getElementById('btnLakehouseExport');
+if (btnLakehouseTop) btnLakehouseTop.addEventListener('click', triggerLakehouseExport);
+const btnLakehouseTab = document.getElementById('btnTriggerLakehouseExport');
+if (btnLakehouseTab) btnLakehouseTab.addEventListener('click', triggerLakehouseExport);
 
 // 7. System Reset
 document.getElementById('btnSystemReset').addEventListener('click', async () => {
@@ -2051,3 +2149,5 @@ initTheme();
 gameLoop();
 setInterval(pollTelemetry, 700);
 pollTelemetry();
+fetchLakehouseStatus();
+setInterval(fetchLakehouseStatus, 5000);

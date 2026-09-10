@@ -1,4 +1,4 @@
-﻿"""Deterministic Robotics-Aware Deadline Scheduler (RADS) scoring and policies."""
+"""Deterministic Robotics-Aware Deadline Scheduler (RADS) scoring and policies."""
 from dataclasses import dataclass
 import time
 
@@ -81,3 +81,30 @@ def calculate_redis_queue_score(criticality, deadline_ms: float, created_ts: flo
     else:
         rads_val = compute_rads_score(criticality, deadline_ms, created_ts)
         return -rads_val
+
+def check_edge_fallback(
+    queue_depth: int,
+    deadline_ms: float,
+    active_workers: int = 2,
+    est_inference_ms: float = 22.0,
+    network_latency_ms: float = 4.0
+) -> dict:
+    """
+    Spec Section 12 / Improvement Roadmap:
+    Evaluates whether the predicted total cloud latency strictly exceeds the robot's deadline.
+    If predicted_total_latency > deadline_ms, advises immediate edge fallback.
+    """
+    workers = max(1, active_workers)
+    est_queue_wait_ms = (queue_depth / workers) * est_inference_ms
+    predicted_total_latency = est_queue_wait_ms + est_inference_ms + network_latency_ms
+    
+    should_fallback = predicted_total_latency > deadline_ms
+    return {
+        "should_fallback": should_fallback,
+        "predicted_total_latency_ms": round(predicted_total_latency, 2),
+        "est_queue_wait_ms": round(est_queue_wait_ms, 2),
+        "est_inference_ms": est_inference_ms,
+        "deadline_ms": deadline_ms,
+        "status": "EXECUTE_AT_EDGE" if should_fallback else "PROCESS_IN_CLOUD",
+        "reason": "deadline_unreachable" if should_fallback else "within_deadline"
+    }

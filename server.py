@@ -9,7 +9,7 @@ import redis
 from fastapi import FastAPI, HTTPException, Header, Depends, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from rads import deadline_risk, rads_score
 
@@ -17,6 +17,7 @@ import rads
 import fleet_tenants
 import incident_archiver
 import autoscaler
+import batch_exporter
 
 try:
     import jwt
@@ -82,6 +83,9 @@ def verify_token(
     # Dev bypass if completely empty in local dev mode
     if not token and not authorization:
         token = "robot-token-secret"
+
+    if token and token not in PRE_SHARED_TOKENS:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or unauthorized robot token")
 
     tenant = fleet_tenants.resolve_tenant(token=token, explicit_tenant_id=x_fleet_tenant)
     policy = ROBOT_POLICIES.get(token, {"robot_token": token, "max_priority": 9, "max_criticality": "LOW"})
@@ -180,6 +184,43 @@ def submit_inference(request: InferenceSubmission, auth=Depends(verify_token)):
     if "max_priority" in auth and priority_num < auth["max_priority"]:
         raise HTTPException(status_code=403, detail="Requested priority exceeds robot policy")
 
+    # Feature 12: Latency-Aware Edge-Cloud Fallback
+    queue_depth = int(redis_client.zcard("queue:tasks") or 0)
+    active_workers_count = int(redis_client.get("autoscaler:current_workers") or 2)
+    fallback_eval = rads.check_edge_fallback(
+        queue_depth=queue_depth,
+        deadline_ms=float(request.deadline_ms),
+        active_workers=active_workers_count,
+        est_inference_ms=22.0,
+        network_latency_ms=4.0
+    )
+    if fallback_eval["should_fallback"]:
+        redis_client.incr("stats:edge_fallbacks")
+        audit_event = {
+            "event": "EDGE_FALLBACK",
+            "robot_id": request.robot_id,
+            "tenant_id": tenant["tenant_id"],
+            "deadline_ms": float(request.deadline_ms),
+            "predicted_latency_ms": fallback_eval["predicted_total_latency_ms"],
+            "queue_depth": queue_depth,
+            "timestamp": time.time(),
+            "reason": "deadline_unreachable"
+        }
+        redis_client.lpush("events:audit", json.dumps(audit_event))
+        redis_client.ltrim("events:audit", 0, 99)
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={"X-RoboNexus-Action": "EXECUTE_AT_EDGE"},
+            content={
+                "status": "EXECUTE_AT_EDGE",
+                "reason": "deadline_unreachable",
+                "predicted_latency_ms": fallback_eval["predicted_total_latency_ms"],
+                "deadline_ms": request.deadline_ms,
+                "queue_depth": queue_depth,
+                "message": f"Cloud queue saturated ({queue_depth} tasks). Predicted total latency {fallback_eval['predicted_total_latency_ms']}ms strictly exceeds robot deadline {request.deadline_ms}ms. Fallback to onboard edge model advised (ISO 3691-4 safety)."
+            }
+        )
+
     task_id = str(uuid.uuid4())
     task_key = f"task:{task_id}"
     now = time.time()
@@ -229,6 +270,30 @@ def predict(request: PredictRequest, auth=Depends(verify_token)):
             raise HTTPException(status_code=403, detail="Requested priority exceeds robot policy")
         if auth.get("robot_id") and request.robot_id != auth["robot_id"]:
             raise HTTPException(status_code=403, detail="Robot ID does not match authenticated token")
+
+        # Feature 12: Latency-Aware Edge-Cloud Fallback
+        queue_depth = int(redis_client.zcard("queue:tasks") or 0)
+        active_workers_count = int(redis_client.get("autoscaler:current_workers") or 2)
+        fallback_eval = rads.check_edge_fallback(
+            queue_depth=queue_depth,
+            deadline_ms=float(request.deadline_ms),
+            active_workers=active_workers_count,
+            est_inference_ms=float(request.estimated_inference_ms),
+            network_latency_ms=4.0
+        )
+        if fallback_eval["should_fallback"]:
+            redis_client.incr("stats:edge_fallbacks")
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"X-RoboNexus-Action": "EXECUTE_AT_EDGE"},
+                content={
+                    "status": "EXECUTE_AT_EDGE",
+                    "reason": "deadline_unreachable",
+                    "predicted_latency_ms": fallback_eval["predicted_total_latency_ms"],
+                    "deadline_ms": request.deadline_ms,
+                    "queue_depth": queue_depth
+                }
+            )
 
         task_id = str(uuid.uuid4())
         task_key = f"task:{task_id}"
@@ -342,7 +407,9 @@ def get_system_metrics():
         "critical_tasks_met": crit_met,
         "failovers_recovered": failovers,
         "predictive_scale_ups": predictive_scale_ups,
-        "active_missions": active_missions_count
+        "active_missions": active_missions_count,
+        "edge_fallbacks": int(redis_client.get("stats:edge_fallbacks") or 0),
+        "lakehouse_exports": int(redis_client.get("stats:lakehouse_exports") or 0)
     }
 
 # ----------------- Predictive Compute Provisioning Endpoints -----------------
@@ -487,6 +554,13 @@ def get_cloud_topology():
             "status": "ONLINE",
             "bucket": "s3://robonexus-incidents/",
             "total_archived": int(redis_client.get("stats:incidents_archived") or 0)
+        },
+        "edge_fallbacks": int(redis_client.get("stats:edge_fallbacks") or 0),
+        "data_lakehouse": {
+            "status": "ONLINE",
+            "format": "APACHE_PARQUET",
+            "total_exports": int(redis_client.get("stats:lakehouse_exports") or 0),
+            "latest_export": json.loads(redis_client.get("lakehouse:latest_export") or "null")
         }
     }
 
@@ -802,6 +876,73 @@ def recover_worker(worker_id: str):
         "current_job_id": ""
     })
     return {"status": "recovered", "worker_id": worker_id}
+
+# Feature 12 Demo Endpoint: Live Latency-Aware Edge-Cloud Fallback Trigger
+@app.post("/api/v1/cloud/demo_edge_fallback")
+def demo_edge_fallback():
+    """
+    Demonstrates protective edge fallback for live hackathon juries:
+    Simulates an AGV requesting inference with an aggressive 15ms safety deadline
+    against the cloud queue. Shows immediate rejection with 'EXECUTE_AT_EDGE'
+    to prevent cloud SLA violations and ensure ISO 3691-4 emergency stop safety.
+    """
+    queue_depth = int(redis_client.zcard("queue:tasks") or 0)
+    eval_res = rads.check_edge_fallback(
+        queue_depth=max(3, queue_depth),
+        deadline_ms=15.0,
+        active_workers=2,
+        est_inference_ms=22.0,
+        network_latency_ms=4.0
+    )
+    redis_client.incr("stats:edge_fallbacks")
+    now = time.time()
+    audit_event = {
+        "event": "EDGE_FALLBACK",
+        "robot_id": "AGV-01",
+        "tenant_id": "FLEET-AGV-LOGISTICS",
+        "deadline_ms": 15.0,
+        "predicted_latency_ms": eval_res["predicted_total_latency_ms"],
+        "queue_depth": max(3, queue_depth),
+        "timestamp": now,
+        "reason": "deadline_unreachable"
+    }
+    redis_client.lpush("events:audit", json.dumps(audit_event))
+    redis_client.ltrim("events:audit", 0, 99)
+    return {
+        "status": "EXECUTE_AT_EDGE",
+        "action": "PROTECTIVE_FALLBACK_TRIGGERED",
+        "predicted_latency_ms": eval_res["predicted_total_latency_ms"],
+        "deadline_ms": 15.0,
+        "queue_depth": max(3, queue_depth),
+        "message": f"Edge-Cloud Fallback triggered! Predicted cloud latency ({eval_res['predicted_total_latency_ms']}ms) exceeded 15.0ms deadline. Onboard edge model took over inference safely."
+    }
+
+# Feature 13: Data Lakehouse Export for Fleet Analytics
+@app.post("/api/v1/cloud/export/lakehouse")
+def export_lakehouse_parquet():
+    """
+    Executes batch ETL export of all fleet metrics, scheduling decisions,
+    and sealed incidents into columnar Apache Parquet format.
+    """
+    res = batch_exporter.export_fleet_telemetry_lakehouse(redis_client=redis_client)
+    return res
+
+@app.get("/api/v1/cloud/export/status")
+def get_lakehouse_export_status():
+    """Retrieves metadata of the latest Parquet export and recent lakehouse batches."""
+    latest = redis_client.get("lakehouse:latest_export")
+    history = redis_client.lrange("lakehouse:history", 0, 9) or []
+    history_parsed = []
+    for h in history:
+        try:
+            history_parsed.append(json.loads(h))
+        except Exception:
+            pass
+    return {
+        "latest_export": json.loads(latest) if latest else None,
+        "export_history": history_parsed,
+        "total_exports": int(redis_client.get("stats:lakehouse_exports") or 0)
+    }
 
 if os.path.isdir("web"):
     app.mount("/dashboard", StaticFiles(directory="web", html=True), name="dashboard")

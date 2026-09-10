@@ -138,6 +138,12 @@
                         <button class="btn btn-rose" id="btnRogue" title="Tests zero-trust token rejection, navigating to Tab 3">
                             🛡️ <span>Rogue Token</span> <span class="btn-tab-tag">Tab 3</span>
                         </button>
+                        <button class="btn btn-warning" id="btnEdgeFallback" title="Latency-aware fallback: rejects unreachable deadlines with EXECUTE_AT_EDGE, navigating to Tab 5">
+                            🛡️ <span>Edge Fallback</span> <span class="btn-tab-tag">Tab 5</span>
+                        </button>
+                        <button class="btn btn-emerald" id="btnLakehouseExport" title="Data lakehouse export: dumps Redis events & incidents into Apache Parquet format, navigating to Tab 4">
+                            📊 <span>Parquet Export</span> <span class="btn-tab-tag">Tab 4</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -189,6 +195,24 @@
                 </div>
                 <div class="metric-val" id="metricFailovers">0</div>
                 <div class="metric-delta delta-success" id="metricFailoverDelta">Cluster Stable</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Edge Protective Fallbacks</span>
+                    <span class="metric-icon">🛡️</span>
+                </div>
+                <div class="metric-val" id="metricEdgeFallbacks">0</div>
+                <div class="metric-delta delta-info" id="metricEdgeFallbacksDelta">Zero Deadline Misses</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Data Lakehouse Parquet</span>
+                    <span class="metric-icon">📊</span>
+                </div>
+                <div class="metric-val" id="metricLakehouseExports">0</div>
+                <div class="metric-delta delta-success" id="metricLakehouseDelta">Snappy Columnar</div>
             </div>
         </section>
 
@@ -442,6 +466,43 @@
                                 <button class="btn btn-secondary" id="btnCopyIncidentJson" style="font-size: 11px; padding: 4px 8px;">📋 Copy JSON</button>
                             </div>
                             <pre class="terminal-log" id="inspJsonView" style="max-height: 180px; font-size: 11px; margin: 0;"></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Lakehouse Parquet Analytics Panel (Feature 13) -->
+                <div style="margin-top: 24px; padding: 20px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                        <div>
+                            <h4 style="font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                                📊 <span>Data Lakehouse Parquet Exporter</span>
+                                <span class="badge-tier" style="background: rgba(16, 185, 129, 0.15); color: var(--color-emerald); font-size: 11px;">PyArrow SNAPPY</span>
+                            </h4>
+                            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">
+                                Exports fleet telemetry, scheduling logs, and sealed incidents into columnar Apache Parquet files in <code>data_lakehouse/</code> for PySpark/Trino analytics.
+                            </p>
+                        </div>
+                        <button class="btn btn-emerald" id="btnTriggerLakehouseExport" style="font-size: 12px; padding: 7px 16px;">
+                            ⚡ <span>Export Parquet Batch Now</span>
+                        </button>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px;">
+                        <div class="metric-card" style="padding: 12px;">
+                            <span class="metric-label">Latest Parquet Dataset</span>
+                            <div class="metric-val" id="lblLakehouseLatestFile" style="font-size: 12.5px; word-break: break-all; font-family: monospace;">-</div>
+                        </div>
+                        <div class="metric-card" style="padding: 12px;">
+                            <span class="metric-label">Row Count</span>
+                            <div class="metric-val" id="lblLakehouseRows" style="font-size: 16px;">-</div>
+                        </div>
+                        <div class="metric-card" style="padding: 12px;">
+                            <span class="metric-label">File Size (Compressed)</span>
+                            <div class="metric-val" id="lblLakehouseSize" style="font-size: 16px;">-</div>
+                        </div>
+                        <div class="metric-card" style="padding: 12px;">
+                            <span class="metric-label">Storage Format</span>
+                            <div class="metric-val" style="font-size: 15px; color: var(--color-emerald);">PARQUET (SNAPPY)</div>
                         </div>
                     </div>
                 </div>

@@ -10,3 +10,5 @@ patch_redis.py
 YHACK26_YS417_THE-REAL-BEGINNERS/
 storage/incidents/*.json
 !storage/incidents/.gitkeep
+data_lakehouse/*.parquet
+!data_lakehouse/.gitkeep
