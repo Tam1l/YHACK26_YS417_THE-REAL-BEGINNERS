@@ -193,11 +193,21 @@ ARENA_HTML = """
         #container {
             position: relative;
             width: 100%;
-            height: 520px;
+            height: 575px;
             background: radial-gradient(circle at center, #111827 0%, #080c14 100%);
             border: 2px solid #1e293b;
             border-radius: 12px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #arena-wrapper {
+            position: relative;
+            width: 100%;
+            flex: 1;
+            min-height: 505px;
+            overflow: hidden;
         }
         canvas {
             position: absolute;
@@ -206,21 +216,28 @@ ARENA_HTML = """
             width: 100%;
             height: 100%;
         }
-        .hud-panel {
-            position: absolute;
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(8px);
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 8px 12px;
-            pointer-events: auto;
-            z-index: 10;
-        }
-        #controls {
-            bottom: 12px;
-            left: 12px;
+        #controls-deck {
+            height: 62px;
+            background: #0f172a;
+            border-top: 1px solid #1e293b;
             display: flex;
-            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            box-sizing: border-box;
+            z-index: 20;
+        }
+        .deck-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .deck-label {
+            font-size: 11px;
+            font-weight: bold;
+            color: #64748b;
+            letter-spacing: 0.5px;
+            margin-right: 4px;
         }
         .btn {
             background: #1e293b;
@@ -278,15 +295,23 @@ ARENA_HTML = """
 </head>
 <body>
     <div id="container">
-        <canvas id="arenaCanvas"></canvas>
-        <div id="banner"></div>
-        <div id="controls" class="hud-panel">
-            <button class="btn btn-primary" id="btnPlayPause">⏸ Pause Fleet</button>
-            <button class="btn btn-danger" id="btnEmergency">🚨 TRIGGER EMERGENCY COLLISION</button>
-            <button class="btn" id="btnBatchDemo" style="background:#1e3a8a; border-color:#3b82f6; color:#fff;">📦 5x P9 + 1x P1 RADS</button>
-            <button class="btn btn-warning" id="btnRogueSpoof" style="background:#450a0a; border-color:#ef4444; color:#fca5a5;">🛡️ ROGUE SPOOF (403)</button>
-            <button class="btn btn-warning" id="btnKillWorker">🔥 KILL WORKER-1 (FAILOVER)</button>
-            <button class="btn" id="btnReset">🧹 Clear Hazard</button>
+        <div id="arena-wrapper">
+            <canvas id="arenaCanvas"></canvas>
+            <div id="banner"></div>
+        </div>
+        <div id="controls-deck">
+            <div class="deck-group">
+                <span class="deck-label">FLEET OPS:</span>
+                <button class="btn btn-primary" id="btnPlayPause">⏸ Pause Fleet</button>
+                <button class="btn btn-danger" id="btnEmergency">🚨 TRIGGER HAZARD</button>
+                <button class="btn" id="btnReset">🧹 Clear Hazard</button>
+            </div>
+            <div class="deck-group">
+                <span class="deck-label">JUDGE DEMO:</span>
+                <button class="btn" id="btnBatchDemo" style="background:#1e3a8a; border-color:#3b82f6; color:#fff;">📦 5x P9 + 1x P1 RADS</button>
+                <button class="btn btn-warning" id="btnRogueSpoof" style="background:#450a0a; border-color:#ef4444; color:#fca5a5;">🛡️ ROGUE SPOOF (403)</button>
+                <button class="btn btn-warning" id="btnKillWorker">🔥 KILL WORKER-1</button>
+            </div>
         </div>
     </div>
 
@@ -296,8 +321,9 @@ ARENA_HTML = """
         const banner = document.getElementById('banner');
 
         function resize() {
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
+            const wrapper = document.getElementById('arena-wrapper');
+            canvas.width = wrapper.clientWidth;
+            canvas.height = wrapper.clientHeight;
         }
         window.addEventListener('resize', resize);
         resize();
@@ -819,7 +845,7 @@ ARENA_HTML = """
 </html>
 """
 
-components.html(ARENA_HTML, height=530)
+components.html(ARENA_HTML, height=590)
 
 st.caption("Shared Edge AI Compute • RADS Dynamic Scheduling • Multi-Worker Fault Tolerance")
 
