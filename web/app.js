@@ -257,462 +257,126 @@ function drawWarehouse() {
 
 function drawRack(x, y, w, h, accentColor, label, tierLevel, light) {
     const isUpper = (y < 250);
-    const timeSec = Date.now() / 1000.0;
-    const halfW = Math.floor(w / 2);
-
-    // 1. Soft Outer Ambient Drop Shadow for 3D depth
     ctx.save();
-    ctx.fillStyle = light ? 'rgba(15, 23, 42, 0.08)' : 'rgba(0, 0, 0, 0.45)';
+
+    // 1. Sleek minimal rack background & frame
+    ctx.fillStyle = light ? 'rgba(248, 250, 252, 0.85)' : 'rgba(15, 23, 42, 0.85)';
     ctx.beginPath();
-    ctx.roundRect(x + 2, y + 4, w - 4, h + 2, 4);
+    ctx.roundRect(x, y, w, h, 4);
     ctx.fill();
-    ctx.restore();
-
-    // 2. Heavy-Duty Industrial Rack Backing (Deep structural shadow cavity)
-    ctx.fillStyle = light ? '#f8fafc' : '#090d16';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = light ? '#cbd5e1' : '#1e293b';
-    ctx.lineWidth = 1.2;
-    ctx.strokeRect(x, y, w, h);
-
-    // 3. Structural Bay X-Bracing (Heavy diagonal cross-trusses behind cargo)
-    ctx.save();
-    ctx.strokeStyle = light ? 'rgba(148, 163, 184, 0.45)' : 'rgba(51, 65, 85, 0.55)';
-    ctx.lineWidth = 1.2;
-    // Left Bay X
-    ctx.beginPath();
-    ctx.moveTo(x + 8, y + 6); ctx.lineTo(x + halfW - 4, y + h - 8);
-    ctx.moveTo(x + halfW - 4, y + 6); ctx.lineTo(x + 8, y + h - 8);
-    // Right Bay X
-    ctx.moveTo(x + halfW + 4, y + 6); ctx.lineTo(x + w - 8, y + h - 8);
-    ctx.moveTo(x + w - 8, y + 6); ctx.lineTo(x + halfW + 4, y + h - 8);
+    ctx.strokeStyle = light ? '#cbd5e1' : '#334155';
+    ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Center Truss Gusset Rivet Plates
-    ctx.fillStyle = light ? '#94a3b8' : '#475569';
-    ctx.beginPath();
-    ctx.arc(x + Math.floor(halfW / 2), y + Math.floor(h / 2), 2.2, 0, Math.PI * 2);
-    ctx.arc(x + halfW + Math.floor(halfW / 2), y + Math.floor(h / 2), 2.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // 4. Wire Mesh Safety Decking (Fine industrial grid)
-    ctx.save();
-    ctx.strokeStyle = light ? 'rgba(203, 213, 225, 0.4)' : 'rgba(51, 65, 85, 0.4)';
-    ctx.lineWidth = 0.6;
-    for (let gx = x + 12; gx < x + w - 12; gx += 8) {
-        ctx.beginPath();
-        ctx.moveTo(gx, y + 8);
-        ctx.lineTo(gx, y + 26);
-        ctx.stroke();
-    }
-    ctx.restore();
-
-    // 5. 4 Individual Pallet Bays with Realistic Industrial Cargo Diversity
-    const numBays = 4;
-    const baySpacing = (w - 20) / numBays;
-    const palletW = 46;
-
-    for (let i = 0; i < numBays; i++) {
-        const px = x + 10 + (i * baySpacing);
-        const palletY = y + 20;
-        const cargoH = 16;
-        const cargoY = palletY - cargoH;
-        const isDroneHoveringThisBay = isUpper && Math.abs(drone.x - (px + palletW / 2)) < 22;
-
-        // --- Wooden Euro-Pallet (EPAL / EUR Standard) ---
-        // Slat top planks with realistic board gaps
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(px, palletY, palletW, 3.5);
-        ctx.fillStyle = '#78350f'; // Dark wooden front edge
-        ctx.fillRect(px, palletY + 3.5, palletW, 1.2);
-        // Vertical slat gap shadow lines
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.fillRect(px + 14, palletY, 1, 3.5);
-        ctx.fillRect(px + 29, palletY, 1, 3.5);
-
-        // 3 Solid Composite Spacer Blocks & Fork Entry Cavities (Negative Space)
-        ctx.fillStyle = '#92400e';
-        ctx.fillRect(px + 1, palletY + 4.7, 7, 3.2);
-        ctx.fillRect(px + Math.floor(palletW / 2) - 4, palletY + 4.7, 8, 3.2);
-        ctx.fillRect(px + palletW - 8, palletY + 4.7, 7, 3.2);
-        // Fastener nail heads on blocks
-        ctx.fillStyle = '#d1d5db';
-        ctx.fillRect(px + 4, palletY + 6, 1, 1);
-        ctx.fillRect(px + Math.floor(palletW / 2), palletY + 6, 1, 1);
-        ctx.fillRect(px + palletW - 5, palletY + 6, 1, 1);
-
-        // Bottom Skid Runners (Chamfered base)
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(px + 1, palletY + 7.9, 7, 1.5);
-        ctx.fillRect(px + Math.floor(palletW / 2) - 4, palletY + 7.9, 8, 1.5);
-        ctx.fillRect(px + palletW - 8, palletY + 7.9, 7, 1.5);
-
-        // --- Diverse Industrial Cargo Types per Bay ---
-        if (i === 0) {
-            // Bay 0: Stacked Kraft Corrugated Cardboard Shipping Cartons
-            ctx.fillStyle = '#d97706';
-            ctx.fillRect(px + 2, cargoY + 6, palletW - 4, 10);
-            // Packaging tape seam
-            ctx.fillStyle = '#f59e0b';
-            ctx.fillRect(px + 2, cargoY + 10, palletW - 4, 2);
-            // Red "FRAGILE" stamp
-            ctx.fillStyle = '#dc2626';
-            ctx.font = 'bold 5.5px sans-serif';
-            ctx.fillText('FRAGILE', px + 4, cargoY + 9.5);
-
-            // Top Box (offset layer with shadow)
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-            ctx.fillRect(px + 6, cargoY + 5.5, palletW - 12, 1);
-            ctx.fillStyle = '#b45309';
-            ctx.fillRect(px + 6, cargoY, palletW - 12, 6);
-            ctx.fillStyle = '#f59e0b';
-            ctx.fillRect(px + 6, cargoY + 3, palletW - 12, 1.5);
-
-            // Fragile orientation arrows (↑↑)
-            ctx.fillStyle = '#0f172a';
-            ctx.font = 'bold 7px sans-serif';
-            ctx.fillText('↑↑', px + 5, cargoY + 14.5);
-
-            // High-density Barcode shipping slip with SKU
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(px + 20, cargoY + 7, 20, 8);
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(px + 22, cargoY + 8, 1.5, 5);
-            ctx.fillRect(px + 24.5, cargoY + 8, 2.5, 5);
-            ctx.fillRect(px + 28, cargoY + 8, 1, 5);
-            ctx.fillRect(px + 30, cargoY + 8, 2, 5);
-            ctx.fillRect(px + 33, cargoY + 8, 1.5, 5);
-            ctx.fillRect(px + 36, cargoY + 8, 2, 5);
-            ctx.font = '4.5px monospace';
-            ctx.fillText('SKU-4821', px + 21, cargoY + 14.2);
-
-        } else if (i === 1) {
-            // Bay 1: Industrial Molded Polymer KLT Crate (Automotive Euro-Tote)
-            const crateColor = accentColor;
-            ctx.fillStyle = crateColor;
-            ctx.beginPath();
-            ctx.roundRect(px + 3, cargoY + 2, palletW - 6, 14, 2);
-            ctx.fill();
-
-            // Molded reinforcement perimeter rim & stiffening ribs
-            ctx.strokeStyle = light ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(px + 6, cargoY + 4, palletW - 12, 10);
-            ctx.beginPath();
-            ctx.moveTo(px + Math.floor(palletW / 2), cargoY + 4);
-            ctx.lineTo(px + Math.floor(palletW / 2), cargoY + 14);
-            ctx.moveTo(px + 13, cargoY + 4); ctx.lineTo(px + 13, cargoY + 14);
-            ctx.moveTo(px + palletW - 13, cargoY + 4); ctx.lineTo(px + palletW - 13, cargoY + 14);
-            ctx.stroke();
-
-            // Ergonomic handle cutout slot
-            ctx.fillStyle = light ? '#cbd5e1' : '#090d16';
-            ctx.fillRect(px + Math.floor(palletW / 2) - 4, cargoY + 6, 8, 2.5);
-
-            // Active Pulsing RFID Tracking Transponder with telemetry halo
-            const rfidX = px + palletW - 9;
-            const rfidY = cargoY + 6;
-            const rfidWave = (Date.now() / 200) % 4;
-            ctx.save();
-            ctx.strokeStyle = `rgba(6, 182, 212, ${Math.max(0, 0.7 - rfidWave * 0.15)})`;
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.arc(rfidX, rfidY, 2.5 + rfidWave, 0, Math.PI * 2);
-            ctx.stroke();
-
-            ctx.fillStyle = '#06b6d4';
-            ctx.shadowColor = '#06b6d4';
-            ctx.shadowBlur = 5;
-            ctx.beginPath();
-            ctx.arc(rfidX, rfidY, 2, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-
-        } else if (i === 2) {
-            // Bay 2: Palletized UN Steel Chemical / Lube Drums (Twin Drum Assembly)
-            const drumW = 18;
-            for (let d = 0; d < 2; d++) {
-                const dx = px + 4 + d * 20;
-                // Metallic drum gradient (brushed cylindrical specular reflection)
-                const grad = ctx.createLinearGradient(dx, cargoY, dx + drumW, cargoY);
-                grad.addColorStop(0, light ? '#475569' : '#1e293b');
-                grad.addColorStop(0.35, light ? '#cbd5e1' : '#64748b');
-                grad.addColorStop(0.65, light ? '#94a3b8' : '#475569');
-                grad.addColorStop(1, light ? '#334155' : '#0f172a');
-                ctx.fillStyle = grad;
-                ctx.beginPath();
-                ctx.roundRect(dx, cargoY + 1, drumW, 15, 2);
-                ctx.fill();
-
-                // Chimb containment rolling rings (top, middle, bottom)
-                ctx.strokeStyle = '#e2e8f0';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(dx, cargoY + 4); ctx.lineTo(dx + drumW, cargoY + 4);
-                ctx.moveTo(dx, cargoY + 8); ctx.lineTo(dx + drumW, cargoY + 8);
-                ctx.moveTo(dx, cargoY + 12); ctx.lineTo(dx + drumW, cargoY + 12);
-                ctx.stroke();
-
-                // Top lid bung plugs
-                ctx.fillStyle = '#0f172a';
-                ctx.fillRect(dx + 3, cargoY + 1, 2.5, 1.2);
-                ctx.fillRect(dx + 11, cargoY + 1, 3.5, 1.2);
-            }
-
-            // UN Class 3 Flammable Hazard Warning Diamond Placard
-            ctx.save();
-            ctx.translate(px + 22, cargoY + 8.5);
-            ctx.rotate(Math.PI / 4);
-            ctx.fillStyle = '#eab308';
-            ctx.fillRect(-3.5, -3.5, 7, 7);
-            ctx.strokeStyle = '#0f172a';
-            ctx.lineWidth = 0.6;
-            ctx.strokeRect(-3.5, -3.5, 7, 7);
-            // Black flame symbol dot
-            ctx.fillStyle = '#0f172a';
-            ctx.beginPath(); ctx.arc(0, 0, 1.2, 0, Math.PI * 2); ctx.fill();
-            ctx.restore();
-
-        } else {
-            // Bay 3: Translucent Stretch-Wrapped High-Bay Pallet Load
-            ctx.fillStyle = light ? '#0284c7' : '#0369a1';
-            ctx.fillRect(px + 3, cargoY + 1, palletW - 6, 15);
-
-            // Glossy stretch-wrap multi-angle specular sheen overlay
-            const wrapGrad = ctx.createLinearGradient(px, cargoY, px + palletW, cargoY + 15);
-            wrapGrad.addColorStop(0, 'rgba(255,255,255,0.06)');
-            wrapGrad.addColorStop(0.3, 'rgba(255,255,255,0.38)');
-            wrapGrad.addColorStop(0.5, 'rgba(255,255,255,0.08)');
-            wrapGrad.addColorStop(0.8, 'rgba(255,255,255,0.32)');
-            wrapGrad.addColorStop(1, 'rgba(255,255,255,0.1)');
-            ctx.fillStyle = wrapGrad;
-            ctx.fillRect(px + 3, cargoY + 1, palletW - 6, 15);
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-            ctx.lineWidth = 0.8;
-            ctx.strokeRect(px + 3, cargoY + 1, palletW - 6, 15);
-
-            // Horizontal stretch wrap film compression bands
-            ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.moveTo(px + 3, cargoY + 5); ctx.lineTo(px + palletW - 3, cargoY + 5);
-            ctx.moveTo(px + 3, cargoY + 10); ctx.lineTo(px + palletW - 3, cargoY + 10);
-            ctx.stroke();
-
-            // Outbound dispatch manifest placard
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(px + 6, cargoY + 5, 16, 8);
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(px + 8, cargoY + 6, 3, 3);
-            ctx.fillRect(px + 12, cargoY + 6, 2, 6);
-            ctx.fillRect(px + 16, cargoY + 6, 3, 6);
-            ctx.font = '4.5px monospace';
-            ctx.fillText('OUTBOUND', px + 7, cargoY + 12);
-        }
-
-        // --- Smart IoT Micro-LED Sensor & Active Drone Scan Highlight ---
-        const ledColors = ['#10b981', '#06b6d4', '#f59e0b', '#10b981'];
-        const ledX = px + Math.floor(palletW / 2);
-        const ledY = y + 3;
-        ctx.save();
-        if (isDroneHoveringThisBay) {
-            // Dynamic vertical laser sweep through the cargo bay
-            const scanLineY = cargoY + ((Date.now() / 25) % 17);
-            ctx.strokeStyle = '#38bdf8';
-            ctx.lineWidth = 1.6;
-            ctx.shadowColor = '#38bdf8';
-            ctx.shadowBlur = 7;
-            ctx.beginPath();
-            ctx.moveTo(px + 2, scanLineY);
-            ctx.lineTo(px + palletW - 2, scanLineY);
-            ctx.stroke();
-
-            // Holographic corner reticles [  ]
-            const cl = 4;
-            ctx.strokeStyle = '#38bdf8';
-            ctx.lineWidth = 1.4;
-            // Top-left
-            ctx.beginPath(); ctx.moveTo(px + 1, cargoY + cl); ctx.lineTo(px + 1, cargoY); ctx.lineTo(px + 1 + cl, cargoY); ctx.stroke();
-            // Top-right
-            ctx.beginPath(); ctx.moveTo(px + palletW - 1 - cl, cargoY); ctx.lineTo(px + palletW - 1, cargoY); ctx.lineTo(px + palletW - 1, cargoY + cl); ctx.stroke();
-            // Bottom-left
-            ctx.beginPath(); ctx.moveTo(px + 1, cargoY + 18 - cl); ctx.lineTo(px + 1, cargoY + 18); ctx.lineTo(px + 1 + cl, cargoY + 18); ctx.stroke();
-            // Bottom-right
-            ctx.beginPath(); ctx.moveTo(px + palletW - 1 - cl, cargoY + 18); ctx.lineTo(px + palletW - 1, cargoY + 18); ctx.lineTo(px + palletW - 1, cargoY + 18 - cl); ctx.stroke();
-
-            // Active Drone Scan Beacon & Status Pill
-            ctx.fillStyle = '#38bdf8';
-            ctx.shadowColor = '#38bdf8';
-            ctx.shadowBlur = 9;
-            ctx.beginPath();
-            ctx.arc(ledX, ledY, 3.2, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.fillStyle = '#38bdf8';
-            ctx.font = 'bold 6.5px monospace';
-            ctx.fillText('⚡ LASER SCAN LOCK', px + 2, cargoY - 3);
-
-        } else {
-            ctx.fillStyle = ledColors[i];
-            ctx.shadowColor = ledColors[i];
-            ctx.shadowBlur = 4;
-            ctx.beginPath();
-            ctx.arc(ledX, ledY, 1.8, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        ctx.restore();
-    }
-
-    // 6. Safety Orange Heavy-Duty Shelf Load Beams with 3D Bevel & Locking Pins
-    // Upper shelf beam
-    const beamY1 = y + 28;
-    ctx.fillStyle = '#ea580c'; // Powder-coated safety orange
-    ctx.fillRect(x, beamY1, w, 4);
-    ctx.fillStyle = '#fb923c'; // Top highlight line
-    ctx.fillRect(x, beamY1, w, 1);
-    ctx.fillStyle = '#9a3412'; // Bottom shadow bevel
-    ctx.fillRect(x, beamY1 + 3, w, 1);
-
-    // Lower base beam
-    const beamY2 = y + h - 16;
-    ctx.fillStyle = '#ea580c';
-    ctx.fillRect(x, beamY2, w, 4);
-    ctx.fillStyle = '#fb923c';
-    ctx.fillRect(x, beamY2, w, 1);
-    ctx.fillStyle = '#9a3412';
-    ctx.fillRect(x, beamY2 + 3, w, 1);
-
-    // Laser-etched Bay Locator IDs along the orange beam
-    const bayLetters = ['01', '02', '03', '04'];
-    const rackPrefix = label.split(' ')[0].replace('RACK-', '');
-    for (let b = 0; b < 4; b++) {
-        const bx = x + 12 + (b * baySpacing);
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(bx + 4, beamY1 + 1, 18, 2.8);
-        ctx.fillStyle = '#fed7aa';
-        ctx.font = 'bold 6px monospace';
-        ctx.fillText(`${rackPrefix}-${bayLetters[b]}`, bx + 5, beamY1 + 3.2);
-    }
-
-    // 7. Heavy Structural Steel Upright Columns (Left, Center, Right)
-    const postWidth = 7;
-    const postPositions = [x, x + Math.floor(w / 2) - 3, x + w - postWidth];
+    // 2. Clean structural uprights (Left, Center, Right)
+    const postW = 3;
+    const postPositions = [x, x + Math.floor(w / 2) - 1.5, x + w - postW];
+    ctx.fillStyle = light ? '#64748b' : '#475569';
     postPositions.forEach(px => {
-        // Steel column body with dual-tone industrial gradient
-        const postGrad = ctx.createLinearGradient(px, y, px + postWidth, y);
-        postGrad.addColorStop(0, light ? '#334155' : '#1e3a8a');
-        postGrad.addColorStop(0.5, light ? '#64748b' : '#2563eb');
-        postGrad.addColorStop(1, light ? '#1e293b' : '#172554');
-        ctx.fillStyle = postGrad;
-        ctx.fillRect(px, y, postWidth, h);
-
-        // Teardrop / Perforated Bolt Slot Pattern (Industrial slotted uprights)
-        ctx.fillStyle = light ? '#e2e8f0' : '#090d16';
-        for (let py = y + 4; py < y + h - 6; py += 7) {
-            ctx.fillRect(px + 2, py, 3, 3);
-        }
-
-        // Beam connector safety clips (yellow locking pins at junctions)
-        ctx.fillStyle = '#fbbf24';
-        ctx.beginPath();
-        ctx.arc(px + 3.5, beamY1 + 2, 1.8, 0, Math.PI * 2);
-        ctx.arc(px + 3.5, beamY2 + 2, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Floor Anchor Base Footplate (At bottom of column)
-        ctx.fillStyle = light ? '#1e293b' : '#475569';
-        ctx.fillRect(px - 1.5, y + h - 3, postWidth + 3, 3);
-        // Anchor bolts
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillRect(px - 0.5, y + h - 2, 1.5, 1.5);
-        ctx.fillRect(px + postWidth, y + h - 2, 1.5, 1.5);
+        ctx.fillRect(px, y, postW, h);
     });
 
-    // 8. Lower Rack Heavy-Duty Corner Crash Guards (Yellow/Black Hazard Bollards)
-    if (!isUpper) {
-        drawCornerGuard(x - 3, y + h - 16, light);
-        drawCornerGuard(x + w - 4, y + h - 16, light);
-    }
+    // 3. Crisp horizontal shelf load beam
+    const beamY = y + 36;
+    ctx.fillStyle = '#ea580c'; // Clean safety orange
+    ctx.fillRect(x, beamY, w, 3);
 
-    // 9. Upper Rack Optical Target Barcode Fiducials (For Aerial Drone Alignment)
-    if (isUpper) {
-        const fiducialX = x + Math.floor(w / 2) - 18;
-        const fiducialY = y - 7;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(fiducialX, fiducialY, 36, 6);
-        ctx.strokeStyle = '#0284c7';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(fiducialX, fiducialY, 36, 6);
-        // QR / ArUco optical marker bit pattern
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(fiducialX + 2, fiducialY + 1, 4, 4);
-        ctx.fillRect(fiducialX + 8, fiducialY + 1, 2, 4);
-        ctx.fillRect(fiducialX + 12, fiducialY + 1, 3, 4);
-        ctx.fillRect(fiducialX + 17, fiducialY + 1, 2, 4);
-        ctx.fillRect(fiducialX + 21, fiducialY + 1, 4, 4);
-        ctx.fillRect(fiducialX + 28, fiducialY + 1, 6, 4);
+    // 4. 4 Clean, evenly spaced cargo pallet bays
+    const numBays = 4;
+    const baySpacing = (w - 12) / numBays;
+    const palletW = 44;
 
-        // When aerial drone flies directly overhead
-        if (Math.abs(drone.x - (x + halfW)) < 55) {
-            ctx.save();
+    for (let i = 0; i < numBays; i++) {
+        const px = x + 6 + (i * baySpacing) + (baySpacing - palletW) / 2;
+        const palletY = beamY - 4;
+        const cargoY = palletY - 18;
+        const isDroneHoveringThisBay = isUpper && Math.abs(drone.x - (px + palletW / 2)) < 22;
+
+        // --- Clean Wooden Euro-Pallet ---
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(px, palletY, palletW, 4);
+        // Clean fork pocket cavities
+        ctx.fillStyle = light ? '#f8fafc' : '#0f172a';
+        ctx.fillRect(px + 6, palletY + 2, 7, 2);
+        ctx.fillRect(px + palletW - 13, palletY + 2, 7, 2);
+
+        // --- Neat, Modern Industrial Cargo ---
+        if (i === 0) {
+            // Bay 0: Kraft Shipping Carton with subtle tape band
+            ctx.fillStyle = '#d97706';
+            ctx.beginPath();
+            ctx.roundRect(px + 3, cargoY + 2, palletW - 6, 16, 2);
+            ctx.fill();
+            ctx.fillStyle = '#b45309';
+            ctx.fillRect(px + Math.floor(palletW / 2) - 2, cargoY + 2, 4, 16);
+
+        } else if (i === 1) {
+            // Bay 1: Industrial Molded Storage Tote
+            ctx.fillStyle = accentColor;
+            ctx.beginPath();
+            ctx.roundRect(px + 4, cargoY + 3, palletW - 8, 15, 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+            ctx.fillRect(px + 3, cargoY + 2, palletW - 6, 2.5);
+
+        } else if (i === 2) {
+            // Bay 2: Twin Industrial Storage Drums
+            const drumW = 16;
+            for (let d = 0; d < 2; d++) {
+                const dx = px + 4 + d * 20;
+                ctx.fillStyle = light ? '#64748b' : '#475569';
+                ctx.beginPath();
+                ctx.roundRect(dx, cargoY + 2, drumW, 16, 2);
+                ctx.fill();
+                ctx.fillStyle = light ? '#94a3b8' : '#64748b';
+                ctx.fillRect(dx + 1, cargoY + 6, drumW - 2, 1.5);
+                ctx.fillRect(dx + 1, cargoY + 11, drumW - 2, 1.5);
+            }
+
+        } else {
+            // Bay 3: Staging Cargo Crate
+            ctx.fillStyle = light ? '#e2e8f0' : '#334155';
+            ctx.beginPath();
+            ctx.roundRect(px + 3, cargoY + 2, palletW - 6, 16, 2);
+            ctx.fill();
+            ctx.fillStyle = accentColor;
+            ctx.fillRect(px + 3, cargoY + 8, palletW - 6, 3);
+        }
+
+        // --- Minimal Drone Hover Laser Scan ---
+        if (isDroneHoveringThisBay) {
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+            ctx.fillRect(px + 2, cargoY, palletW - 4, 20);
+
+            const scanY = cargoY + ((Date.now() / 25) % 18);
             ctx.strokeStyle = '#38bdf8';
-            ctx.lineWidth = 1.5;
-            ctx.shadowColor = '#38bdf8';
-            ctx.shadowBlur = 8;
-            ctx.strokeRect(fiducialX - 2, fiducialY - 2, 40, 10);
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(px + 2, scanY);
+            ctx.lineTo(px + palletW - 2, scanY);
+            ctx.stroke();
+
             ctx.fillStyle = '#38bdf8';
-            ctx.font = 'bold 7px monospace';
-            ctx.fillText('⚡ OPTICAL SCAN LOCK: 99.8%', fiducialX - 18, fiducialY - 4);
-            ctx.restore();
+            ctx.beginPath();
+            ctx.arc(px + Math.floor(palletW / 2), y + 6, 2.5, 0, Math.PI * 2);
+            ctx.fill();
         }
     }
 
-    // 10. Floating Digital Twin HUD Pill Badge (Capacities & RFID sync status)
-    ctx.save();
-    ctx.fillStyle = light ? 'rgba(255, 255, 255, 0.94)' : 'rgba(15, 23, 42, 0.9)';
+    // 5. Clean, Minimalist Rack Footer Label Strip
+    ctx.fillStyle = '#10b981';
     ctx.beginPath();
-    ctx.roundRect(x + 8, y + h - 12, w - 16, 10, 3);
-    ctx.fill();
-    ctx.strokeStyle = light ? 'rgba(203, 213, 225, 0.85)' : 'rgba(51, 65, 85, 0.85)';
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-
-    // Live pulsing green status indicator
-    const pulseAlpha = 0.6 + 0.4 * Math.sin(timeSec * 4);
-    ctx.fillStyle = `rgba(16, 185, 129, ${pulseAlpha})`;
-    ctx.beginPath();
-    ctx.arc(x + 15, y + h - 7, 2.2, 0, Math.PI * 2);
+    ctx.arc(x + 12, y + 49, 2.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Label & Capacity
-    ctx.fillStyle = light ? '#0284c7' : '#38bdf8';
-    ctx.font = 'bold 7.5px monospace';
-    ctx.fillText(label, x + 22, y + h - 4.5);
+    ctx.fillStyle = light ? '#0f172a' : '#f8fafc';
+    ctx.font = 'bold 8px monospace';
+    ctx.fillText(label, x + 19, y + 51.5);
 
     ctx.fillStyle = light ? '#64748b' : '#94a3b8';
-    ctx.font = '6.5px monospace';
-    ctx.fillText(`CAP: 98.4% • ${tierLevel.split(':')[0]}`, x + w - 95, y + h - 4.5);
-    ctx.restore();
-}
+    ctx.font = '7.5px monospace';
+    ctx.fillText("CAP: 98%", x + w - 48, y + 51.5);
 
-function drawCornerGuard(gx, gy, light) {
-    // Heavy-duty crash protection bollard with diagonal hazard stripes
-    const gw = 7, gh = 15;
-    ctx.save();
-    ctx.fillStyle = '#eab308'; // Safety yellow
-    ctx.fillRect(gx, gy, gw, gh);
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 0.8;
-    ctx.strokeRect(gx, gy, gw, gh);
-
-    // Diagonal black hazard stripes
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(gx, gy + 3); ctx.lineTo(gx + gw, gy + 8);
-    ctx.moveTo(gx, gy + 8); ctx.lineTo(gx + gw, gy + 13);
-    ctx.stroke();
     ctx.restore();
 }
 
