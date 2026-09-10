@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import json
 import base64
@@ -283,6 +283,8 @@ ARENA_HTML = """
         <div id="controls" class="hud-panel">
             <button class="btn btn-primary" id="btnPlayPause">⏸ Pause Fleet</button>
             <button class="btn btn-danger" id="btnEmergency">🚨 TRIGGER EMERGENCY COLLISION</button>
+            <button class="btn" id="btnBatchDemo" style="background:#1e3a8a; border-color:#3b82f6; color:#fff;">📦 5x P9 + 1x P1 RADS</button>
+            <button class="btn btn-warning" id="btnRogueSpoof" style="background:#450a0a; border-color:#ef4444; color:#fca5a5;">🛡️ ROGUE SPOOF (403)</button>
             <button class="btn btn-warning" id="btnKillWorker">🔥 KILL WORKER-1 (FAILOVER)</button>
             <button class="btn" id="btnReset">🧹 Clear Hazard</button>
         </div>
@@ -403,6 +405,54 @@ ARENA_HTML = """
                 btn.className = "btn btn-warning";
                 showBanner("✅ Worker-1 Restored to Healthy State", "rgba(16, 185, 129, 0.9)", "#10b981");
                 try { await fetch('http://127.0.0.1:8000/api/v1/debug/workers/worker-1/recover', { method: 'POST' }); } catch(e) {}
+            }
+        };
+
+        // Dispatch 5x P9 then 1x P1 (DEMO_CHECKLIST.md Step 3 & 4)
+        document.getElementById('btnBatchDemo').onclick = async () => {
+            showBanner("📦 Dispatching 5x P9 Batch Tasks, followed by 1x P1 AGV Collision Task...", "rgba(30, 58, 138, 0.95)", "#60a5fa");
+            for (let i = 1; i <= 5; i++) {
+                queueList.push({ id: `SWEEPER-12 [P9 #${i}]`, crit: 'LOW', p: 9, color: '#3b82f6' });
+                try {
+                    await fetch('http://127.0.0.1:8000/predict', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Robot-Token': 'sweeper-token' },
+                        body: JSON.stringify({ robot_id: 'SWEEPER-12', priority: 9, image_base64: 'aGVsbG8=' })
+                    });
+                } catch(e) {}
+            }
+            await new Promise(r => setTimeout(r, 400));
+            // Dispatch 1x P1 AGV Collision task
+            queueList.unshift({ id: 'AGV-01 [CRITICAL P1]', crit: 'CRITICAL', p: 1, color: '#ef4444' });
+            packets.push({ fromX: agv.x, fromY: agv.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#ef4444' });
+            try {
+                const resp = await fetch('http://127.0.0.1:8000/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Robot-Token': 'agv-token' },
+                    body: JSON.stringify({ robot_id: 'AGV-01', priority: 1, image_base64: 'aGVsbG8=' })
+                });
+                const d = await resp.json();
+                showBanner(`🎯 RADS PREEMPTION PROVED! P1 AGV Task jumped ahead of 5x P9 jobs! Score: ${d.rads_score || 'Max Urgency'}`, "rgba(185, 28, 28, 0.95)", "#ef4444");
+            } catch(e) {}
+        };
+
+        // Rogue Sweeper Spoofing P1 -> 403 Forbidden (DEMO_CHECKLIST.md Step 5)
+        document.getElementById('btnRogueSpoof').onclick = async () => {
+            showBanner("🔒 Testing Server Security: SWEEPER-12 attempting to spoof CRITICAL P1 priority...", "rgba(88, 28, 135, 0.95)", "#c084fc");
+            try {
+                const resp = await fetch('http://127.0.0.1:8000/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Robot-Token': 'sweeper-token' },
+                    body: JSON.stringify({ robot_id: 'SWEEPER-12', priority: 1, image_base64: 'aGVsbG8=' })
+                });
+                if (resp.status === 403) {
+                    const err = await resp.json();
+                    showBanner(`🛡️ 403 FORBIDDEN: Server Enforced Policy! [${err.detail}]`, "rgba(220, 38, 38, 0.95)", "#f87171");
+                } else {
+                    showBanner(`Response: HTTP ${resp.status}`, "rgba(30, 41, 59, 0.9)", "#94a3b8");
+                }
+            } catch(e) {
+                showBanner(`Connection error: ${e}`, "rgba(220, 38, 38, 0.95)", "#f87171");
             }
         };
 

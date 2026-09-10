@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import io
 import base64
@@ -17,11 +17,12 @@ AUTH_HEADERS = {
     "X-Robot-Token": "robot-token-secret"
 }
 
-# Spec Section 44: Distinct robot personas with different criticality & deadlines
+# Spec Section 29 & 44: Distinct robot personas with authorized tokens and deadlines
 ROBOTS = [
     {
         "name": "AGV-Collision-Avoidance",
         "robot_id": "AGV-01",
+        "token": "agv-token",
         "criticality": "CRITICAL",
         "deadline_ms": 100.0,
         "rate": 0.8,
@@ -30,6 +31,7 @@ ROBOTS = [
     {
         "name": "Drone-Navigation",
         "robot_id": "DRONE-07",
+        "token": "drone-token",
         "criticality": "HIGH",
         "deadline_ms": 250.0,
         "rate": 1.5,
@@ -38,6 +40,7 @@ ROBOTS = [
     {
         "name": "Floor-Sweeper-Inventory",
         "robot_id": "SWEEPER-12",
+        "token": "sweeper-token",
         "criticality": "NORMAL",
         "deadline_ms": 800.0,
         "rate": 2.5,
@@ -72,9 +75,10 @@ def post_with_exponential_backoff(robot_cfg: Dict, max_retries: int = 5) -> str:
         "image_base64": generate_mock_sensor_frame(robot_cfg["name"], robot_cfg["color"]),
     }
     
+    headers = {"X-Robot-Token": robot_cfg.get("token", "robot-token-secret")}
     for attempt in range(1, max_retries + 1):
         try:
-            resp = requests.post(INFERENCE_ENDPOINT, json=payload, headers=AUTH_HEADERS, timeout=4.0)
+            resp = requests.post(INFERENCE_ENDPOINT, json=payload, headers=headers, timeout=4.0)
             if resp.status_code == 201:
                 data = resp.json()
                 req_id = data["request_id"]
@@ -96,9 +100,10 @@ def poll_for_completion(req_id: str, robot_cfg: Dict, timeout: float = 15.0):
         return
     start = time.time()
     url = f"{SERVER_URL}/api/v1/inference/{req_id}/result"
+    headers = {"X-Robot-Token": robot_cfg.get("token", "robot-token-secret")}
     while time.time() - start < timeout:
         try:
-            resp = requests.get(url, headers=AUTH_HEADERS, timeout=3.0)
+            resp = requests.get(url, headers=headers, timeout=3.0)
             if resp.status_code == 200:
                 data = resp.json()
                 status = data.get("status")
