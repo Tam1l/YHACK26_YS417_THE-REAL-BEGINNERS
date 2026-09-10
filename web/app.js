@@ -1345,7 +1345,7 @@ function closeRobotCamera() {
     const video = document.getElementById('sideCameraVideo');
     if (video) video.srcObject = null;
     document.getElementById('sideCameraPreview').hidden = true;
-    document.getElementById('btnSideCamera').innerText = 'Take camera photo';
+    document.getElementById('btnSideCamera').innerText = 'Open robot camera';
 }
 async function openRobotCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -1369,7 +1369,7 @@ async function openRobotCamera() {
 }
 document.getElementById('btnSideCamera')?.addEventListener('click', () => activeCameraStream ? closeRobotCamera() : openRobotCamera());
 document.getElementById('btnCloseCamera')?.addEventListener('click', closeRobotCamera);
-document.getElementById('btnCaptureCamera')?.addEventListener('click', () => {
+function captureRobotCameraFrame() {
     const video = document.getElementById('sideCameraVideo');
     if (!video?.videoWidth) return;
     const canvas = document.createElement('canvas');
@@ -1380,7 +1380,9 @@ document.getElementById('btnCaptureCamera')?.addEventListener('click', () => {
         if (blob) queueVisionPhoto(new File([blob], 'robot-camera.jpg', { type: 'image/jpeg' }), 'web_camera');
     }, 'image/jpeg', 0.92);
     closeRobotCamera();
-});
+}
+document.getElementById('btnCaptureCamera')?.addEventListener('click', captureRobotCameraFrame);
+document.getElementById('btnCameraPreviewCapture')?.addEventListener('click', captureRobotCameraFrame);
 document.getElementById('btnOpenVisionCamera')?.addEventListener('click', () => document.getElementById('btnSideCamera')?.click());
 document.getElementById('btnSideUpload')?.addEventListener('click', () => document.getElementById('btnUploadVision')?.click());
 document.getElementById('btnSideDispatch')?.addEventListener('click', () => document.getElementById('btnDispatchTask')?.click());
