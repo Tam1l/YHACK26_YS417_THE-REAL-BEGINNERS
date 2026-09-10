@@ -1,0 +1,11 @@
+# RoboNexus YOLOv8 CPU perception dependencies
+# Install with: python -m pip install -r requirements-yolo-cpu.txt
+# The PyTorch CPU wheel index is required on Windows/CPU-only machines.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.7.1+cpu
+torchvision==0.22.1+cpu
+ultralytics>=8.3,<9
+opencv-python-headless==4.11.0.86
+Pillow>=10.0
+numpy>=1.26
