@@ -389,30 +389,38 @@ body {
     transform: translateY(0);
 }
 
+/* Elegant Button Color Palettes */
 .btn-tab-tag {
     font-size: 10px;
     font-weight: 700;
     padding: 2px 6px;
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.22);
-    color: #ffffff;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.95);
     letter-spacing: 0.3px;
     display: inline-block;
     line-height: 1.2;
+    margin-left: 4px;
 }
 
 [data-theme="dark"] .btn-tab-tag {
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(0, 0, 0, 0.45);
+    border-color: rgba(255, 255, 255, 0.15);
 }
 
-.btn-primary {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+/* Elegant Sapphire Blue (Compute & Scheduling) */
+.btn-primary, .btn-sapphire {
+    background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+    border: 1px solid rgba(147, 197, 253, 0.35);
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 8px rgba(30, 64, 175, 0.28);
 }
 
-.btn-primary:hover {
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.45);
+.btn-primary:hover, .btn-sapphire:hover {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px rgba(37, 99, 235, 0.42);
+    transform: translateY(-1.5px);
 }
 
 .btn-slate {
@@ -433,59 +441,59 @@ body {
     border-color: var(--border-card);
 }
 
-.btn-danger {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
+/* Elegant Velvet Ruby (Safety & Threat Protection) */
+.btn-danger, .btn-rose, .btn-ruby {
+    background: linear-gradient(135deg, #be123c 0%, #881337 100%);
+    border: 1px solid rgba(254, 205, 211, 0.32);
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 8px rgba(190, 18, 60, 0.28);
 }
 
-.btn-danger:hover {
-    background: linear-gradient(135deg, #dc2626, #b91c1c);
-    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.45);
+.btn-danger:hover, .btn-rose:hover, .btn-ruby:hover {
+    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px rgba(225, 29, 72, 0.42);
+    transform: translateY(-1.5px);
 }
 
-.btn-warning {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
+/* Elegant Burnished Amber (Resilience & Failover) */
+.btn-warning, .btn-amber {
+    background: linear-gradient(135deg, #d97706 0%, #92400e 100%);
+    border: 1px solid rgba(253, 230, 138, 0.35);
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 2px 8px rgba(180, 83, 9, 0.28);
 }
 
-.btn-warning:hover {
-    background: linear-gradient(135deg, #d97706, #b45309);
-    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45);
+.btn-warning:hover, .btn-amber:hover {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px rgba(217, 119, 6, 0.42);
+    transform: translateY(-1.5px);
 }
 
+/* Elegant Jade Emerald (Analytics & Storage) */
 .btn-emerald {
-    background: linear-gradient(135deg, #10b981, #059669);
+    background: linear-gradient(135deg, #059669 0%, #065f46 100%);
+    border: 1px solid rgba(110, 231, 183, 0.32);
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 8px rgba(5, 150, 105, 0.28);
 }
 
 .btn-emerald:hover {
-    background: linear-gradient(135deg, #059669, #047857);
-    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45);
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px rgba(16, 185, 129, 0.42);
+    transform: translateY(-1.5px);
 }
 
 .btn-cyan {
-    background: linear-gradient(135deg, #0891b2, #0e7490);
+    background: linear-gradient(135deg, #0891b2 0%, #155e75 100%);
+    border: 1px solid rgba(165, 243, 252, 0.32);
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 8px rgba(21, 94, 117, 0.28);
 }
 
 .btn-cyan:hover {
-    background: linear-gradient(135deg, #0e7490, #155e75);
-    box-shadow: 0 4px 14px rgba(8, 145, 178, 0.45);
-}
-
-.btn-rose {
-    background: linear-gradient(135deg, #e11d48, #be123c);
-    color: #ffffff;
-    box-shadow: 0 2px 8px rgba(225, 29, 72, 0.3);
-}
-
-.btn-rose:hover {
-    background: linear-gradient(135deg, #be123c, #9f1239);
-    box-shadow: 0 4px 14px rgba(225, 29, 72, 0.45);
+    background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px rgba(8, 145, 178, 0.42);
+    transform: translateY(-1.5px);
 }
 
 
