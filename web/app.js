@@ -1254,6 +1254,8 @@ async function submitVisionPhoto(file, source) {
         actionStatus.innerText = 'Submitting image to YOLO worker…';
         actionStatus.style.color = 'var(--color-blue)';
     }
+    const sideStatus = document.getElementById('sideVisionStatus');
+    if (sideStatus) sideStatus.innerText = 'Submitting image to the YOLO worker…';
     try {
         const imageBase64 = await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -1278,6 +1280,7 @@ async function submitVisionPhoto(file, source) {
             if (result.state === 'completed') {
                 await pollTelemetry();
                 showToast(`YOLO complete: ${result.perception.action}`, result.perception.hazard_detected ? 'error' : 'success');
+                if (sideStatus) sideStatus.innerText = `YOLO complete: ${result.perception.action}`;
                 return;
             }
             if (result.state === 'failed') throw new Error(result.error || 'worker failed');
@@ -1288,14 +1291,59 @@ async function submitVisionPhoto(file, source) {
             actionStatus.innerText = `YOLO error: ${error.message}`;
             actionStatus.style.color = 'var(--color-red)';
         }
+        if (sideStatus) sideStatus.innerText = `YOLO error: ${error.message}`;
         showToast(`Vision submission failed: ${error.message}`, 'error');
     }
 }
 
+let pendingVisionPhoto = null;
+function queueVisionPhoto(file, source) {
+    if (!file) return;
+    const auto = document.getElementById('sideAutoYolo');
+    if (!auto || auto.checked) {
+        submitVisionPhoto(file, source);
+        return;
+    }
+    pendingVisionPhoto = { file, source };
+    document.getElementById('btnSideRunYolo').disabled = false;
+    document.getElementById('sideVisionStatus').innerText = 'Photo selected. Press Run Real YOLO Inference.';
+}
+
 document.getElementById('btnUploadVision')?.addEventListener('click', () => document.getElementById('visionImageUpload')?.click());
 document.getElementById('btnOpenVisionCamera')?.addEventListener('click', () => document.getElementById('visionCameraCapture')?.click());
-document.getElementById('visionImageUpload')?.addEventListener('change', event => submitVisionPhoto(event.target.files?.[0], 'web_upload'));
-document.getElementById('visionCameraCapture')?.addEventListener('change', event => submitVisionPhoto(event.target.files?.[0], 'web_camera'));
+document.getElementById('visionImageUpload')?.addEventListener('change', event => queueVisionPhoto(event.target.files?.[0], 'web_upload'));
+document.getElementById('visionCameraCapture')?.addEventListener('change', event => queueVisionPhoto(event.target.files?.[0], 'web_camera'));
+
+// Left dispatcher panel mirrors the top controls, so every legacy mission
+// operation remains available without sacrificing the NextGen canvas.
+function syncSideControl(sideId, mainId, eventName = 'change') {
+    const side = document.getElementById(sideId);
+    const main = document.getElementById(mainId);
+    side?.addEventListener(eventName, () => {
+        main.value = side.value;
+        main.dispatchEvent(new Event(eventName, { bubbles: true }));
+    });
+}
+syncSideControl('sidePresetSelect', 'presetSelect');
+syncSideControl('sideSceneSelect', 'sceneSelect');
+syncSideControl('sideCritSelect', 'critSelect');
+syncSideControl('sideDeadline', 'deadlineSlider', 'input');
+
+document.getElementById('sideDeadline')?.addEventListener('input', event => {
+    document.getElementById('sideDeadlineValue').innerText = `${event.target.value}ms`;
+});
+document.getElementById('btnSideCamera')?.addEventListener('click', () => document.getElementById('btnOpenVisionCamera')?.click());
+document.getElementById('btnSideUpload')?.addEventListener('click', () => document.getElementById('btnUploadVision')?.click());
+document.getElementById('btnSideDispatch')?.addEventListener('click', () => document.getElementById('btnDispatchTask')?.click());
+document.getElementById('btnSideReset')?.addEventListener('click', () => document.getElementById('btnSystemReset')?.click());
+document.getElementById('btnSideRunYolo')?.addEventListener('click', () => {
+    if (!pendingVisionPhoto) return;
+    const pending = pendingVisionPhoto;
+    pendingVisionPhoto = null;
+    document.getElementById('btnSideRunYolo').disabled = true;
+    submitVisionPhoto(pending.file, pending.source);
+});
+document.querySelectorAll('[data-side-tab]').forEach(button => button.addEventListener('click', () => navigateToTab(button.dataset.sideTab)));
 
 // ================= AUTO-NAVIGATE & CENTER ON TAB =================
 let navigationTimer = null;

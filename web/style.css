@@ -993,8 +993,51 @@ body {
     align-items: center;
 }
 
+.operations-shell {
+    max-width: 1740px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 278px minmax(0, 1fr);
+    align-items: start;
+}
+
+.operations-shell .app-container {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+}
+
+.operator-panel {
+    position: sticky;
+    top: 74px;
+    height: calc(100vh - 86px);
+    overflow-y: auto;
+    padding: 18px;
+    border-right: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.panel-heading { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.panel-heading-icon { font-size: 25px; }
+.panel-heading small { display: block; margin-top: 2px; font-size: 11px; color: var(--text-muted); }
+.panel-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+.panel-input { width: 100%; }
+.operator-panel h3 { font-size: 13px; margin-top: 2px; }
+.panel-help { color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
+.panel-divider { height: 1px; background: var(--border-subtle); margin: 7px 0; }
+.panel-button { width: 100%; justify-content: center; }
+.panel-check { font-size: 11px; color: var(--text-secondary); display: flex; gap: 7px; align-items: flex-start; }
+.panel-check input { margin-top: 2px; accent-color: var(--color-blue); }
+.panel-status { font-size: 11px; font-weight: 600; color: var(--color-blue); background: var(--bg-input); padding: 8px; border-radius: 6px; }
+.panel-link { background: transparent; border: 0; border-radius: 6px; color: var(--text-secondary); padding: 7px 8px; text-align: left; font-size: 12px; cursor: pointer; }
+.panel-link:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+
 /* Keep the command surface readable from laptops through projector screens. */
 @media (max-width: 1180px) {
+    .operations-shell { grid-template-columns: 238px minmax(0, 1fr); }
     .header-bar { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
     .header-status-pills { order: 3; width: 100%; flex-wrap: wrap; }
     .command-toolbar { justify-content: flex-start; }
@@ -1002,6 +1045,8 @@ body {
 }
 
 @media (max-width: 720px) {
+    .operations-shell { display: block; }
+    .operator-panel { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
     .header-bar, .command-toolbar { padding-left: 14px; padding-right: 14px; }
     .header-actions { width: 100%; justify-content: space-between; }
     .brand-badge, .brand-sub { display: none; }
