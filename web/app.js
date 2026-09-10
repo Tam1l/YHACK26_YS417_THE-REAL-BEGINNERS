@@ -1310,7 +1310,6 @@ function queueVisionPhoto(file, source) {
 }
 
 document.getElementById('btnUploadVision')?.addEventListener('click', () => document.getElementById('visionImageUpload')?.click());
-document.getElementById('btnOpenVisionCamera')?.addEventListener('click', () => document.getElementById('visionCameraCapture')?.click());
 document.getElementById('visionImageUpload')?.addEventListener('change', event => queueVisionPhoto(event.target.files?.[0], 'web_upload'));
 document.getElementById('visionCameraCapture')?.addEventListener('change', event => queueVisionPhoto(event.target.files?.[0], 'web_camera'));
 
@@ -1332,7 +1331,57 @@ syncSideControl('sideDeadline', 'deadlineSlider', 'input');
 document.getElementById('sideDeadline')?.addEventListener('input', event => {
     document.getElementById('sideDeadlineValue').innerText = `${event.target.value}ms`;
 });
-document.getElementById('btnSideCamera')?.addEventListener('click', () => document.getElementById('btnOpenVisionCamera')?.click());
+let activeCameraStream = null;
+function setSideVisionStatus(message, color = 'var(--color-blue)') {
+    const status = document.getElementById('sideVisionStatus');
+    if (status) {
+        status.innerText = message;
+        status.style.color = color;
+    }
+}
+function closeRobotCamera() {
+    activeCameraStream?.getTracks().forEach(track => track.stop());
+    activeCameraStream = null;
+    const video = document.getElementById('sideCameraVideo');
+    if (video) video.srcObject = null;
+    document.getElementById('sideCameraPreview').hidden = true;
+    document.getElementById('btnSideCamera').innerText = 'Take camera photo';
+}
+async function openRobotCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        setSideVisionStatus('This browser does not support direct camera access.', 'var(--color-red)');
+        return;
+    }
+    try {
+        activeCameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        });
+        const video = document.getElementById('sideCameraVideo');
+        video.srcObject = activeCameraStream;
+        await video.play();
+        document.getElementById('sideCameraPreview').hidden = false;
+        document.getElementById('btnSideCamera').innerText = 'Camera is on';
+        setSideVisionStatus('Camera is on. Frame is local until Capture and run YOLO.', 'var(--color-emerald)');
+    } catch (error) {
+        setSideVisionStatus(`Camera permission failed: ${error.message}`, 'var(--color-red)');
+    }
+}
+document.getElementById('btnSideCamera')?.addEventListener('click', () => activeCameraStream ? closeRobotCamera() : openRobotCamera());
+document.getElementById('btnCloseCamera')?.addEventListener('click', closeRobotCamera);
+document.getElementById('btnCaptureCamera')?.addEventListener('click', () => {
+    const video = document.getElementById('sideCameraVideo');
+    if (!video?.videoWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(blob => {
+        if (blob) queueVisionPhoto(new File([blob], 'robot-camera.jpg', { type: 'image/jpeg' }), 'web_camera');
+    }, 'image/jpeg', 0.92);
+    closeRobotCamera();
+});
+document.getElementById('btnOpenVisionCamera')?.addEventListener('click', () => document.getElementById('btnSideCamera')?.click());
 document.getElementById('btnSideUpload')?.addEventListener('click', () => document.getElementById('btnUploadVision')?.click());
 document.getElementById('btnSideDispatch')?.addEventListener('click', () => document.getElementById('btnDispatchTask')?.click());
 document.getElementById('btnSideReset')?.addEventListener('click', () => document.getElementById('btnSystemReset')?.click());

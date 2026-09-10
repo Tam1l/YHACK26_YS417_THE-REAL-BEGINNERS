@@ -1034,6 +1034,10 @@ body {
 .panel-status { font-size: 11px; font-weight: 600; color: var(--color-blue); background: var(--bg-input); padding: 8px; border-radius: 6px; }
 .panel-link { background: transparent; border: 0; border-radius: 6px; color: var(--text-secondary); padding: 7px 8px; text-align: left; font-size: 12px; cursor: pointer; }
 .panel-link:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+.camera-preview { overflow: hidden; border: 1px solid var(--border-card); border-radius: 8px; background: #020617; }
+.camera-preview video { display: block; width: 100%; max-height: 210px; object-fit: cover; }
+.camera-preview-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 7px; }
+.camera-preview-actions .btn { padding: 7px 5px; font-size: 10px; justify-content: center; }
 
 /* Keep the command surface readable from laptops through projector screens. */
 @media (max-width: 1180px) {
