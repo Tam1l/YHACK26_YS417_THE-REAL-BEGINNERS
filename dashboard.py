@@ -380,9 +380,15 @@ ARENA_HTML = """
             const btn = document.getElementById('btnHazardToggle');
             if (!humanHazard) {
                 humanHazard = true;
-                agv.status = 'STOPPED';
                 btn.innerText = "🧹 CLEAR HAZARD";
                 btn.className = "btn btn-primary";
+
+                // Ensure the hazard is ALWAYS positioned ahead of the AGV in its lane of travel
+                if (agv.x > canvas.width - 240 || agv.x >= 450) {
+                    agv.x = 100; // Reset AGV to earlier in the corridor so it approaches cleanly
+                }
+                humanPos.x = Math.min(canvas.width - 120, Math.max(agv.x + 180, 480));
+                agv.status = 'NORMAL';
                 
                 // Visual red packet fly
                 packets.push({ fromX: agv.x, fromY: agv.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#ef4444' });
@@ -390,7 +396,7 @@ ARENA_HTML = """
                 // Insert into front of queue (RADS line-cutting!)
                 queueList.unshift({ id: 'AGV-01 [CRITICAL P1]', crit: 'CRITICAL', p: 1, color: '#ef4444' });
                 
-                showBanner("🚨 HAZARD TRIGGERED! AGV Emergency Braking Activated • Task Preempted to Queue #1", "rgba(185, 28, 28, 0.95)", "#ef4444");
+                showBanner("🚨 HAZARD TRIGGERED! Obstacle Detected Ahead • Preemption Braking Activated", "rgba(185, 28, 28, 0.95)", "#ef4444");
 
                 try {
                     const resp = await fetch('http://127.0.0.1:8000/api/v1/inference', {
@@ -805,11 +811,17 @@ ARENA_HTML = """
                 if (humanHazard) {
                     const dist = humanPos.x - agv.x;
                     if (dist > 75) {
+                        agv.status = 'NORMAL';
                         agv.x += agv.speed;
+                    } else if (dist > 0) {
+                        agv.status = 'STOPPED';
                     } else {
+                        // Safety fallback: ensure robot never stops past the hazard
+                        agv.x = humanPos.x - 75;
                         agv.status = 'STOPPED';
                     }
                 } else {
+                    agv.status = 'NORMAL';
                     agv.x += agv.speed;
                     if (agv.x > canvas.width - 60) agv.x = 40;
                 }
