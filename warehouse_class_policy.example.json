@@ -1,0 +1,17 @@
+{
+  "pallet": {
+    "action": "REROUTE",
+    "severity": "MEDIUM",
+    "reason": "Pallet blocks the planned AGV route."
+  },
+  "forklift": {
+    "action": "STOP_AND_REROUTE",
+    "severity": "HIGH",
+    "reason": "Forklift detected in the shared aisle."
+  },
+  "damaged_package": {
+    "action": "CONTROLLED_STOP",
+    "severity": "HIGH",
+    "reason": "Damaged package requires an inspection workflow."
+  }
+}

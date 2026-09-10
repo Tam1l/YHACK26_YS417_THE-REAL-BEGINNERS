@@ -33,4 +33,4 @@ def test_unknown_token_is_rejected():
     response = TestClient(server.app).post(
         "/predict", json=payload(), headers={"X-Robot-Token": "not-a-token"}
     )
-    assert response.status_code == 401
+    assert response.status_code == 403

@@ -23,7 +23,7 @@ COPY requirements.txt .
 COPY requirements-cpu.txt .
 
 # Install CPU-optimized dependencies
-RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu torch==2.7.1+cpu \
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu torch==2.7.1+cpu torchvision==0.22.1+cpu \
     && pip install --no-cache-dir -r requirements-cpu.txt \
     && pip install --no-cache-dir --no-deps ultralytics==8.4.146
 

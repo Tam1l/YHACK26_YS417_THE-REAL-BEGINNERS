@@ -91,6 +91,7 @@ class InferenceSubmission(BaseModel):
     criticality: str = Field("NORMAL", description="Mission Criticality: CRITICAL, HIGH, NORMAL, LOW")
     deadline_ms: float = Field(500.0, ge=10.0, le=30000.0, description="Execution deadline in milliseconds")
     image_base64: str = Field(..., description="Base64-encoded JPEG/PNG image")
+    source: Optional[str] = Field(None, description="Origin of the frame, for example live_camera")
 
     @field_validator("image_base64")
     @classmethod
@@ -188,6 +189,7 @@ def submit_inference(request: InferenceSubmission, auth=Depends(verify_token)):
         "priority": str(priority_num),
         "deadline_ms": str(request.deadline_ms),
         "image_base64": request.image_base64,
+        "source": request.source or "api",
         "state": "queued",
         "rads_score": str(rads_val),
         "queue_score": str(queue_score),
@@ -286,6 +288,15 @@ def get_result(request_id: str, auth=Depends(verify_token)):
         "assigned_worker": data.get("assigned_worker", ""),
         "created_ts": data.get("created_ts"),
         "completed_ts": data.get("completed_ts"),
+        "perception": {
+            "action": data.get("perception_action", "PENDING"),
+            "severity": data.get("perception_severity", "NONE"),
+            "hazard_detected": data.get("hazard_detected") == "true",
+            "hazard_class": data.get("hazard_class", ""),
+            "hazard_confidence": float(data.get("hazard_confidence", 0.0)),
+            "hazard_zone": data.get("hazard_zone", "CLEAR"),
+            "reason": data.get("perception_reason", ""),
+        },
     }
     
     if state == "completed":

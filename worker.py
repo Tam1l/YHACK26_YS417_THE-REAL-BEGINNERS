@@ -11,6 +11,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 import incident_archiver
 import fleet_tenants
+from perception_policy import evaluate_detections
 from autoscaler import ElasticAutoscaler
 
 REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
@@ -43,13 +44,19 @@ try:
 except Exception as e:
     print(f"[*] Native Edge Vision Engine active ({e})")
 
+# Ultralytics/TorchVision lazily initializes CPU kernels on the first prediction.
+# A single lock protects that shared model when the local worker threads receive
+# frames at the same time.
+inference_lock = threading.Lock()
+
 QUEUE_KEY = "queue:tasks"
 TASK_PREFIX = "task:"
 CLASSES = ["obstacle", "person", "agv_robot", "docking_station", "pallet", "safety_cone"]
 
 def run_vision_inference(pil_img: Image.Image):
     if yolo_model:
-        results = yolo_model(pil_img, verbose=False)
+        with inference_lock:
+            results = yolo_model(pil_img, verbose=False)
         boxes, classes, confidences = [], [], []
         for r in results:
             if hasattr(r, "boxes") and r.boxes is not None:
@@ -165,6 +172,7 @@ class AIWorker(threading.Thread):
                 start_t = time.perf_counter()
                 boxes, classes, confidences = run_vision_inference(pil_img)
                 inference_ms = (time.perf_counter() - start_t) * 1000.0
+                perception = evaluate_detections(boxes, classes, confidences, pil_img.size)
                 
                 now = time.time()
                 total_latency_ms = (now - created_ts) * 1000.0
@@ -180,8 +188,20 @@ class AIWorker(threading.Thread):
                     "total_latency_ms": f"{total_latency_ms:.2f}",
                     "deadline_met": "true" if deadline_met else "false",
                     "completed_ts": str(now),
-                    "assigned_worker": self.worker_id
+                    "assigned_worker": self.worker_id,
+                    "perception_action": perception["action"],
+                    "perception_severity": perception["severity"],
+                    "hazard_detected": "true" if perception["hazard_detected"] else "false",
+                    "hazard_class": perception["hazard_class"],
+                    "hazard_confidence": str(perception["hazard_confidence"]),
+                    "hazard_zone": perception["hazard_zone"],
+                    "perception_reason": perception["reason"],
                 })
+
+                # Keep the most recent user-supplied camera result available
+                # for the mission-control canvas without mixing in simulator jobs.
+                if task_data.get("source") == "live_camera":
+                    redis_client.set("vision:latest_task_id", task_id)
                 
                 self.processed_count += 1
                 redis_client.incr("stats:processed")
@@ -195,16 +215,18 @@ class AIWorker(threading.Thread):
                     redis_client.incr("stats:critical_total")
                     if deadline_met:
                         redis_client.incr("stats:critical_deadline_met")
-                        
-                    # Auto Black-Box Archival for Critical events
+
+                if crit in ("CRITICAL", "1", 1) or perception["action"] == "EMERGENCY_BRAKE":
+                    # Archive both mission-critical tasks and detected collision hazards.
                     incident_archiver.archive_incident(
                         robot_id=robot_id,
-                        event_type="COLLISION_AVOIDANCE_HAZARD",
-                        criticality=crit,
+                        event_type=perception["action"],
+                        criticality="CRITICAL" if perception["action"] == "EMERGENCY_BRAKE" else crit,
                         details={
                             "task_id": task_id,
                             "classes": classes,
                             "confidences": confidences,
+                            "perception": perception,
                             "latency_ms": round(total_latency_ms, 2),
                             "deadline_met": deadline_met,
                             "worker": self.worker_id
@@ -290,11 +312,15 @@ def main():
     print("Base Workers: Worker-1, Worker-2 | Elastic Autoscaler: ACTIVE")
     print("=" * 65)
     
-    # Clean up any stale crash injection flags from previous runs
+    # A unique node id lets several machines consume the same Redis queue
+    # without overwriting one another's heartbeat records.
+    node_id = os.getenv("WORKER_NODE_ID", "local").strip() or "local"
+    worker_ids = (f"{node_id}-worker-1", f"{node_id}-worker-2")
+
+    # Clean up this node's stale crash flags and publish healthy worker records.
     try:
-        for k in redis_client.keys("debug:fail:*"):
-            redis_client.delete(k)
-        for wid in ("worker-1", "worker-2"):
+        for wid in worker_ids:
+            redis_client.delete(f"debug:fail:{wid}")
             redis_client.hset(f"worker:{wid}", mapping={
                 "worker_id": wid,
                 "status": "IDLE",
@@ -305,9 +331,9 @@ def main():
             })
     except Exception as e:
         print(f"[*] Redis init note: {e}")
-    
-    worker1 = AIWorker("worker-1")
-    worker2 = AIWorker("worker-2")
+
+    worker1 = AIWorker(worker_ids[0])
+    worker2 = AIWorker(worker_ids[1])
     supervisor = HealthSupervisor([worker1, worker2])
     
     # Elastic Autoscaler integrated with supervisor and worker factory
