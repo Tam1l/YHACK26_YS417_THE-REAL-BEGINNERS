@@ -200,7 +200,7 @@ class AIWorker(threading.Thread):
 
                 # Keep the most recent user-supplied camera result available
                 # for the mission-control canvas without mixing in simulator jobs.
-                if task_data.get("source") == "live_camera":
+                if task_data.get("source") in ("live_camera", "web_camera", "web_upload"):
                     redis_client.set("vision:latest_task_id", task_id)
                 
                 self.processed_count += 1

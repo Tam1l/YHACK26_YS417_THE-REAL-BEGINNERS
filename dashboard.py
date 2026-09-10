@@ -50,24 +50,159 @@ except Exception:
 
 st.markdown("""
 <style>
-    .stApp { background-color: #0b0f19; color: #f3f4f6; }
-    .worker-card {
-        background: #111827; border: 1px solid #374151; border-radius: 10px; padding: 15px; margin-bottom: 10px;
+    /* Sleek Modern Light Mode Design System */
+    .stApp {
+        background-color: #f8fafc;
+        color: #0f172a;
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
     }
+    
+    /* Top Header Bar */
+    header[data-testid="stHeader"] {
+        background: rgba(248, 250, 252, 0.85);
+        backdrop-filter: blur(8px);
+    }
+    
+    /* Sidebar Styling - Clean Slate-100 with High Readability */
+    section[data-testid="stSidebar"] {
+        background-color: #f1f5f9 !important;
+        border-right: 1px solid #e2e8f0;
+    }
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3 {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+    section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] span {
+        color: #1e293b !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+    }
+    section[data-testid="stSidebar"] .stCaption,
+    section[data-testid="stSidebar"] p {
+        color: #475569 !important;
+    }
+    
+    /* Sleek Light Selectboxes in Sidebar */
+    section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+    }
+    section[data-testid="stSidebar"] div[data-baseweb="select"] span,
+    section[data-testid="stSidebar"] div[data-baseweb="select"] div {
+        color: #0f172a !important;
+        font-weight: 500 !important;
+    }
+    section[data-testid="stSidebar"] div[data-baseweb="select"] svg {
+        fill: #64748b !important;
+    }
+
+    /* Sidebar Buttons (Avoid harsh black boxes) */
+    section[data-testid="stSidebar"] .stButton > button {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+        transition: all 0.2s ease !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background: #f8fafc !important;
+        border-color: #94a3b8 !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06) !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button p {
+        color: #0f172a !important;
+    }
+    
+    /* Primary Action Button (Dispatch) */
+    section[data-testid="stSidebar"] div.row-widget.stButton:nth-of-type(1) > button,
+    section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] > div:has(button:contains("Dispatch")) button {
+        background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+        color: #ffffff !important;
+        border: none !important;
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+    }
+    section[data-testid="stSidebar"] div.row-widget.stButton:nth-of-type(1) > button p {
+        color: #ffffff !important;
+    }
+    
+    /* Metric Cards */
+    div[data-testid="stMetric"] {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 14px 18px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+    div[data-testid="stMetricLabel"] p {
+        color: #64748b !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    div[data-testid="stMetricValue"] {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+
+    /* Tabs Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #f1f5f9;
+        padding: 4px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        color: #64748b;
+        font-weight: 600;
+        padding: 8px 16px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    
+    /* Worker Cards */
+    .worker-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    
     .badge-crit { background-color: #ef4444; color: white; padding: 3px 8px; border-radius: 6px; font-weight: bold; }
-    .badge-high { background-color: #f59e0b; color: black; padding: 3px 8px; border-radius: 6px; font-weight: bold; }
+    .badge-high { background-color: #f59e0b; color: white; padding: 3px 8px; border-radius: 6px; font-weight: bold; }
     .badge-norm { background-color: #10b981; color: white; padding: 3px 8px; border-radius: 6px; }
-    .badge-low  { background-color: #6b7280; color: white; padding: 3px 8px; border-radius: 6px; }
+    .badge-low  { background-color: #64748b; color: white; padding: 3px 8px; border-radius: 6px; }
 </style>
 """, unsafe_allow_html=True)
 
 def generate_synthetic_scene(scene_type: str) -> str:
-    img = Image.new("RGB", (320, 240), color=(20, 24, 33))
+    img = Image.new("RGB", (320, 240), color=(241, 245, 249))
     draw = ImageDraw.Draw(img)
     for x in range(0, 320, 40):
-        draw.line([(x, 0), (x, 240)], fill=(35, 42, 56), width=1)
+        draw.line([(x, 0), (x, 240)], fill=(226, 232, 240), width=1)
     for y in range(0, 240, 40):
-        draw.line([(0, y), (320, y)], fill=(35, 42, 56), width=1)
+        draw.line([(0, y), (320, y)], fill=(226, 232, 240), width=1)
 
     if scene_type == "🚨 Emergency: Human in AGV Path":
         draw.rectangle([110, 40, 190, 190], fill=(239, 68, 68), outline=(255, 255, 255), width=2)
@@ -235,9 +370,9 @@ ARENA_HTML = """
         body {
             margin: 0;
             padding: 0;
-            background-color: #0b0f19;
-            color: #f3f4f6;
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
             overflow: hidden;
             user-select: none;
         }
@@ -245,10 +380,10 @@ ARENA_HTML = """
             position: relative;
             width: 100%;
             height: 575px;
-            background: radial-gradient(circle at center, #111827 0%, #080c14 100%);
-            border: 2px solid #1e293b;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
             border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -259,6 +394,7 @@ ARENA_HTML = """
             flex: 1;
             min-height: 505px;
             overflow: hidden;
+            background: #f8fafc;
         }
         canvas {
             position: absolute;
@@ -269,78 +405,82 @@ ARENA_HTML = """
         }
         #controls-deck {
             height: 62px;
-            background: #0f172a;
-            border-top: 1px solid #1e293b;
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 16px;
             box-sizing: border-box;
             z-index: 20;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.02);
         }
         .deck-group {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
         .deck-label {
             font-size: 11px;
-            font-weight: bold;
+            font-weight: 700;
             color: #64748b;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.6px;
             margin-right: 4px;
         }
         .btn {
-            background: #1e293b;
-            color: #e2e8f0;
-            border: 1px solid #475569;
-            border-radius: 6px;
+            background: #f1f5f9;
+            color: #1e293b;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
             padding: 8px 14px;
             font-size: 12px;
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             align-items: center;
             gap: 6px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
         }
         .btn:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
         .btn-danger {
-            background: #991b1b;
-            border-color: #ef4444;
-            color: white;
+            background: #ef4444;
+            border-color: #dc2626;
+            color: #ffffff;
         }
-        .btn-danger:hover { background: #b91c1c; }
+        .btn-danger:hover { background: #dc2626; }
         .btn-primary {
-            background: #1d4ed8;
-            border-color: #3b82f6;
-            color: white;
+            background: #2563eb;
+            border-color: #1d4ed8;
+            color: #ffffff;
         }
-        .btn-primary:hover { background: #2563eb; }
+        .btn-primary:hover { background: #1d4ed8; }
         .btn-warning {
-            background: #854d0e;
-            border-color: #eab308;
-            color: white;
+            background: #d97706;
+            border-color: #b45309;
+            color: #ffffff;
         }
+        .btn-warning:hover { background: #b45309; }
         #banner {
             position: absolute;
-            top: 12px;
+            top: 14px;
             left: 50%;
             transform: translateX(-50%);
-            padding: 6px 18px;
-            border-radius: 20px;
+            padding: 8px 22px;
+            border-radius: 24px;
             font-size: 13px;
-            font-weight: bold;
+            font-weight: 700;
             display: none;
-            z-index: 20;
-            animation: pulse 1s infinite alternate;
+            z-index: 30;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+            animation: pulse 1.2s infinite alternate;
         }
         @keyframes pulse {
-            from { opacity: 0.85; }
-            to { opacity: 1.0; }
+            from { opacity: 0.92; transform: translateX(-50%) scale(0.99); }
+            to { opacity: 1.0; transform: translateX(-50%) scale(1.01); }
         }
     </style>
 </head>
@@ -353,15 +493,15 @@ ARENA_HTML = """
         <div id="controls-deck">
             <div class="deck-group">
                 <span class="deck-label">FLEET OPS:</span>
-                <button class="btn btn-primary" id="btnPlayPause">⏸ Pause Fleet</button>
+                <button class="btn" id="btnPlayPause" style="background:#0f172a; border-color:#0f172a; color:#ffffff;">⏸ Pause Fleet</button>
                 <button class="btn btn-danger" id="btnHazardToggle">🚨 TRIGGER HAZARD (AGV-01)</button>
             </div>
             <div class="deck-group">
                 <span class="deck-label">LIVE DEMOS:</span>
-                <button class="btn" id="btnBatchDemo" style="background:#1e3a8a; border-color:#3b82f6; color:#fff;">📦 5x Batch + 1 Critical Leapfrog</button>
+                <button class="btn" id="btnBatchDemo" style="background:#2563eb; border-color:#1d4ed8; color:#ffffff;">📦 5x Batch + 1 Critical Leapfrog</button>
                 <button class="btn btn-warning" id="btnKillWorker">🔥 KILL WORKER-1</button>
-                <button class="btn" id="btnSurge" style="background:#065f46; border-color:#10b981; color:#fff;">📈 Fleet Surge (Autoscale)</button>
-                <button class="btn" id="btnRogueSpoof" style="background:#450a0a; border-color:#ef4444; color:#fca5a5;">🛡️ Rogue Token (403)</button>
+                <button class="btn" id="btnSurge" style="background:#059669; border-color:#047857; color:#ffffff;">📈 Fleet Surge (Autoscale)</button>
+                <button class="btn" id="btnRogueSpoof" style="background:#881337; border-color:#701a75; color:#fdf2f8;">🛡️ Rogue Token (403)</button>
             </div>
         </div>
     </div>
@@ -642,8 +782,12 @@ ARENA_HTML = """
             const w = canvas.width;
             const h = canvas.height;
 
-            // Background Grid
-            ctx.strokeStyle = '#1e293b';
+            // Cleanroom Base Canvas Fill
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, w, h);
+
+            // Background Grid (Cleanroom subtle steel/slate grid)
+            ctx.strokeStyle = '#e2e8f0';
             ctx.lineWidth = 1;
             for (let x = 0; x < w; x += 40) {
                 ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
@@ -653,9 +797,9 @@ ARENA_HTML = """
             }
 
             // Central AGV Highway Transit Lane
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+            ctx.fillStyle = '#f1f5f9';
             ctx.fillRect(0, 225, w, 80);
-            ctx.strokeStyle = '#334155';
+            ctx.strokeStyle = '#cbd5e1';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(0, 225); ctx.lineTo(w, 225);
@@ -663,8 +807,8 @@ ARENA_HTML = """
             ctx.stroke();
 
             // Center yellow hazard guidestrip
-            ctx.strokeStyle = '#eab308';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = 2.5;
             ctx.setLineDash([14, 12]);
             ctx.beginPath();
             ctx.moveTo(0, 265); ctx.lineTo(w, 265);
@@ -683,21 +827,21 @@ ARENA_HTML = """
             const dockH = 92;
             ctx.fillStyle = 'rgba(16, 185, 129, 0.08)';
             ctx.fillRect(dockX, dockY, dockW, dockH);
-            ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)';
             ctx.lineWidth = 1.5;
             ctx.strokeRect(dockX, dockY, dockW, dockH);
 
-            ctx.fillStyle = '#10b981';
+            ctx.fillStyle = '#059669';
             ctx.font = 'bold 11px sans-serif';
             ctx.fillText("⚡ AUTONOMOUS DOCK", dockX + 16, dockY + 22);
 
-            ctx.fillStyle = '#6ee7b7';
+            ctx.fillStyle = '#0f766e';
             ctx.font = '9px monospace';
             ctx.fillText("BAY 1: WIRELESS INDUCTIVE", dockX + 16, dockY + 44);
             ctx.fillText("TELEMETRY: 5.8 GHz RAW", dockX + 16, dockY + 62);
             ctx.fillText("STATUS: ACTIVE READY", dockX + 16, dockY + 80);
 
-            // Storage Racks - Perfectly spaced with zero overlap!
+            // Storage Racks - Clean White with colored inventory bins
             const rackW = 175;
             const rackH = 46;
 
@@ -718,30 +862,30 @@ ARENA_HTML = """
 
             allRacks.forEach(r => {
                 // Shelf Body
-                ctx.fillStyle = '#0f172a';
+                ctx.fillStyle = '#ffffff';
                 ctx.fillRect(r.x, r.y, rackW, rackH);
-                ctx.strokeStyle = '#334155';
+                ctx.strokeStyle = '#cbd5e1';
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(r.x, r.y, rackW, rackH);
 
                 // Rack Label
-                ctx.fillStyle = '#94a3b8';
+                ctx.fillStyle = '#475569';
                 ctx.font = 'bold 10px monospace';
                 ctx.fillText(r.label, r.x + 10, r.y + 28);
 
                 // Inventory Bins
                 for (let b = 0; b < 4; b++) {
                     const bx = r.x + 102 + (b * 16);
-                    ctx.fillStyle = (b % 2 === 0) ? '#f59e0b' : '#0284c7';
+                    ctx.fillStyle = (b % 2 === 0) ? '#f59e0b' : '#2563eb';
                     ctx.fillRect(bx, r.y + 12, 12, 22);
-                    ctx.strokeStyle = '#0f172a';
+                    ctx.strokeStyle = '#cbd5e1';
                     ctx.lineWidth = 1;
                     ctx.strokeRect(bx, r.y + 12, 12, 22);
                 }
             });
 
-            // Drone flight path dashed guide (between Top Racks and Highway)
-            ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+            // Drone flight path dashed guide
+            ctx.strokeStyle = 'rgba(2, 132, 199, 0.25)';
             ctx.lineWidth = 1;
             ctx.setLineDash([4, 8]);
             ctx.beginPath();
@@ -757,10 +901,10 @@ ARENA_HTML = """
             const hubX = w - hubW - 16;
             const hubY = 14;
 
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(hubX, hubY, hubW, hubH);
-            ctx.strokeStyle = '#38bdf8';
-            ctx.lineWidth = 1.8;
+            ctx.strokeStyle = '#0284c7';
+            ctx.lineWidth = 1.6;
             ctx.strokeRect(hubX, hubY, hubW, hubH);
 
             ctx.fillStyle = '#0284c7';
@@ -771,15 +915,15 @@ ARENA_HTML = """
             ctx.fillText("☁️ PRIVATE AI CLOUD", hubX + 10, hubY + 15);
 
             // Workers
-            ctx.fillStyle = worker1Alive ? '#10b981' : '#ef4444';
+            ctx.fillStyle = worker1Alive ? '#16a34a' : '#dc2626';
             ctx.beginPath(); ctx.arc(hubX + 18, hubY + 45, 5, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#e2e8f0';
+            ctx.fillStyle = '#1e293b';
             ctx.font = '11px monospace';
             ctx.fillText(`Worker-1: ${worker1Alive ? 'HEALTHY' : 'DEAD'}`, hubX + 30, hubY + 49);
 
-            ctx.fillStyle = worker2Alive ? '#10b981' : '#ef4444';
+            ctx.fillStyle = worker2Alive ? '#16a34a' : '#dc2626';
             ctx.beginPath(); ctx.arc(hubX + 18, hubY + 70, 5, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#e2e8f0';
+            ctx.fillStyle = '#1e293b';
             ctx.fillText(`Worker-2: HEALTHY`, hubX + 30, hubY + 74);
         }
 
@@ -789,13 +933,13 @@ ARENA_HTML = """
             const qW = 230;
             const qH = 92;
 
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(qX, qY, qW, qH);
-            ctx.strokeStyle = '#6366f1';
-            ctx.lineWidth = 1.8;
+            ctx.strokeStyle = '#4f46e5';
+            ctx.lineWidth = 1.6;
             ctx.strokeRect(qX, qY, qW, qH);
 
-            ctx.fillStyle = '#4f46e5';
+            ctx.fillStyle = '#4338ca';
             ctx.fillRect(qX, qY, qW, 22);
 
             ctx.fillStyle = '#ffffff';
@@ -814,13 +958,13 @@ ARENA_HTML = """
                 ctx.fillText(`P${item.p}`, qX + 12, rowY);
 
                 // Robot / Task Name
-                ctx.fillStyle = '#f8fafc';
+                ctx.fillStyle = '#1e293b';
                 ctx.font = '10px monospace';
                 const nameText = item.id.length > 17 ? item.id.substring(0, 15) + '..' : item.id;
                 ctx.fillText(nameText, qX + 38, rowY);
 
                 // Position Badge
-                ctx.fillStyle = (idx === 0) ? '#ef4444' : '#64748b';
+                ctx.fillStyle = (idx === 0) ? '#dc2626' : '#64748b';
                 ctx.font = 'bold 9px monospace';
                 ctx.fillText(`#${idx + 1}`, qX + qW - 20, rowY);
             });
@@ -833,10 +977,10 @@ ARENA_HTML = """
             const hudX = w - hudW - 16;
             const hudY = canvas.height - hudH - 14;
 
-            ctx.fillStyle = 'rgba(10, 15, 26, 0.95)';
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(hudX, hudY, hudW, hudH);
-            ctx.strokeStyle = '#06b6d4';
-            ctx.lineWidth = 1.8;
+            ctx.strokeStyle = '#0891b2';
+            ctx.lineWidth = 1.6;
             ctx.strokeRect(hudX, hudY, hudW, hudH);
 
             ctx.fillStyle = '#0891b2';
@@ -879,27 +1023,27 @@ ARENA_HTML = """
                 ctx.font = 'bold 8px monospace';
                 ctx.fillText(`${liveVision.action || 'YOLO'}: ${summary.substring(0, 21)}`, hudX + 8, hudY + 117);
             } else if (humanHazard) {
-                ctx.strokeStyle = '#ef4444';
+                ctx.strokeStyle = '#dc2626';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(hudX + 50, hudY + 32, 105, 60);
-                ctx.fillStyle = '#ef4444';
+                ctx.fillStyle = '#dc2626';
                 ctx.fillRect(hudX + 50, hudY + 22, 105, 13);
                 ctx.fillStyle = 'white';
                 ctx.font = 'bold 9px sans-serif';
                 ctx.fillText("HUMAN HAZARD 99.1%", hudX + 53, hudY + 32);
 
-                ctx.fillStyle = '#ef4444';
+                ctx.fillStyle = '#dc2626';
                 ctx.font = 'bold 10px monospace';
                 ctx.fillText("STATUS: PREEMPTION BRAKE", hudX + 8, hudY + 118);
             } else {
-                ctx.strokeStyle = '#10b981';
+                ctx.strokeStyle = '#16a34a';
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(hudX + 35, hudY + 38, 135, 48);
-                ctx.fillStyle = '#10b981';
+                ctx.fillStyle = '#16a34a';
                 ctx.font = '9px monospace';
                 ctx.fillText("CORRIDOR CLEAR [P=0.98]", hudX + 40, hudY + 34);
 
-                ctx.fillStyle = '#94a3b8';
+                ctx.fillStyle = '#64748b';
                 ctx.font = '10px monospace';
                 ctx.fillText(`LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`, hudX + 8, hudY + 118);
             }
@@ -948,26 +1092,26 @@ ARENA_HTML = """
 
             // Draw Human if hazard
             if (humanHazard) {
-                ctx.fillStyle = '#f87171';
+                ctx.fillStyle = '#ef4444';
                 ctx.beginPath(); ctx.arc(humanPos.x, humanPos.y - 14, 8, 0, Math.PI * 2); ctx.fill();
                 ctx.fillRect(humanPos.x - 6, humanPos.y - 6, 12, 22);
-                ctx.strokeStyle = '#ef4444';
+                ctx.strokeStyle = '#dc2626';
                 ctx.strokeRect(humanPos.x - 14, humanPos.y - 26, 28, 48);
 
-                ctx.fillStyle = '#ef4444';
+                ctx.fillStyle = '#dc2626';
                 ctx.font = 'bold 10px sans-serif';
                 ctx.fillText("HAZARD", humanPos.x - 20, humanPos.y - 32);
             }
 
             // AGV Robot
-            ctx.fillStyle = agv.status === 'STOPPED' ? '#ef4444' : '#dc2626';
+            ctx.fillStyle = agv.status === 'STOPPED' ? '#dc2626' : '#b91c1c';
             ctx.fillRect(agv.x - 22, agv.y - 15, 44, 30);
-            ctx.strokeStyle = agv.status === 'STOPPED' ? '#fca5a5' : '#f87171';
+            ctx.strokeStyle = '#991b1b';
             ctx.lineWidth = 2;
             ctx.strokeRect(agv.x - 22, agv.y - 15, 44, 30);
 
             // Light cone
-            ctx.fillStyle = agv.status === 'STOPPED' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(234, 179, 8, 0.15)';
+            ctx.fillStyle = agv.status === 'STOPPED' ? 'rgba(220, 38, 38, 0.22)' : 'rgba(217, 119, 6, 0.18)';
             ctx.beginPath();
             ctx.moveTo(agv.x + 22, agv.y);
             ctx.lineTo(agv.x + 100, agv.y - 35);
@@ -982,10 +1126,10 @@ ARENA_HTML = """
             // Drone
             ctx.fillStyle = '#0284c7';
             ctx.fillRect(drone.x - 12, drone.y - 12, 24, 24);
-            ctx.strokeStyle = '#38bdf8';
+            ctx.strokeStyle = '#0369a1';
             ctx.strokeRect(drone.x - 12, drone.y - 12, 24, 24);
             // Drone beam
-            ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
+            ctx.fillStyle = 'rgba(2, 132, 199, 0.18)';
             ctx.beginPath();
             ctx.moveTo(drone.x, drone.y + 12);
             ctx.lineTo(drone.x - 22, drone.y + 36);
@@ -996,7 +1140,7 @@ ARENA_HTML = """
             // Sweeper
             ctx.fillStyle = '#059669';
             ctx.beginPath(); ctx.arc(sweeper.x, sweeper.y, 14, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = '#34d399';
+            ctx.strokeStyle = '#047857';
             ctx.stroke();
 
             // Packets in flight
@@ -1005,7 +1149,7 @@ ARENA_HTML = """
                 const curY = p.fromY + (p.toY - p.fromY) * p.progress;
                 ctx.fillStyle = p.color;
                 ctx.shadowColor = p.color;
-                ctx.shadowBlur = 8;
+                ctx.shadowBlur = 6;
                 ctx.beginPath(); ctx.arc(curX, curY, 5, 0, Math.PI * 2); ctx.fill();
                 ctx.shadowBlur = 0;
             });
@@ -1120,13 +1264,13 @@ with tab1:
             badge = " [ELASTIC]" if w_type == "ELASTIC_DYNAMIC" or wid not in ("worker-1", "worker-2") else " [BASE]"
             
             st.markdown(f"""
-            <div style="background: #111827; border: 2px solid {card_border}; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+            <div style="background: #ffffff; border: 1.5px solid {card_border}; border-radius: 10px; padding: 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <b style="font-size: 16px;">{wid.upper()}{badge} {icon}</b>
-                    <span>Status: <b>{status_val}</b></span>
+                    <b style="font-size: 15px; color: #0f172a;">{wid.upper()}{badge} {icon}</b>
+                    <span style="font-size: 13px; color: #475569;">Status: <b style="color: #0f172a;">{status_val}</b></span>
                 </div>
-                <div style="font-size: 13px; color: #9ca3af; margin-top: 6px;">
-                    Processed: <b>{proc_jobs} tasks</b> | Active Job: <code>{cur_job[:8] if cur_job else 'IDLE'}</code>
+                <div style="font-size: 13px; color: #64748b; margin-top: 8px;">
+                    Processed: <b style="color: #1e293b;">{proc_jobs} tasks</b> | Active Job: <code style="background: #f1f5f9; color: #0f172a; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">{cur_job[:8] if cur_job else 'IDLE'}</code>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -1174,8 +1318,8 @@ with tab2:
     scale_events = r.lrange("cloud:autoscaler:events", 0, 10) if redis_ok else []
     if scale_events:
         for ev in scale_events:
-            color = "#10b981" if "SCALE_DOWN" in ev else ("#f59e0b" if "SCALE_UP" in ev else "#60a5fa")
-            st.markdown(f"<div style='font-family: monospace; font-size: 13px; color: {color}; padding: 3px 0;'>{ev}</div>", unsafe_allow_html=True)
+            color = "#059669" if "SCALE_DOWN" in ev else ("#d97706" if "SCALE_UP" in ev else "#2563eb")
+            st.markdown(f"<div style='font-family: monospace; font-size: 13px; color: {color}; padding: 6px 10px; background: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid {color}; margin-bottom: 6px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);'>{ev}</div>", unsafe_allow_html=True)
     else:
         st.info("Autoscaler initialized. Click '📈 Trigger Fleet Surge' in the sidebar to observe live elastic scaling!")
 
@@ -1189,14 +1333,14 @@ with tab3:
         for idx, (tid, tdata) in enumerate(tenants_summary.items()):
             with t_cols[idx]:
                 st.markdown(f"""
-                <div style="background: #111827; border-left: 4px solid {tdata.get('color', '#3b82f6')}; border-radius: 8px; padding: 14px;">
-                    <b style="font-size: 15px; color: {tdata.get('color')};">{tdata.get('name')}</b><br>
-                    <small>Tier: <b>{tdata.get('tier')}</b></small>
-                    <hr style="margin: 8px 0; border-color: #374151;">
-                    <div>Target SLA: <b>&le; {tdata.get('sla_target_ms')} ms</b></div>
-                    <div>SLA Met: <b style="color: #10b981;">{tdata.get('sla_compliance_pct')}%</b></div>
-                    <div>Rate Limit: <b>{tdata.get('rate_limit_per_sec')} req/s</b></div>
-                    <div>Total Served: <b>{tdata.get('total_requests')} reqs</b></div>
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid {tdata.get('color', '#2563eb')}; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <b style="font-size: 15px; color: {tdata.get('color', '#2563eb')};">{tdata.get('name')}</b><br>
+                    <small style="color: #64748b;">Tier: <b style="color: #1e293b;">{tdata.get('tier')}</b></small>
+                    <hr style="margin: 10px 0; border: none; border-top: 1px solid #e2e8f0;">
+                    <div style="color: #475569; font-size: 13px; margin-bottom: 4px;">Target SLA: <b style="color: #0f172a;">&le; {tdata.get('sla_target_ms')} ms</b></div>
+                    <div style="color: #475569; font-size: 13px; margin-bottom: 4px;">SLA Met: <b style="color: #059669;">{tdata.get('sla_compliance_pct')}%</b></div>
+                    <div style="color: #475569; font-size: 13px; margin-bottom: 4px;">Rate Limit: <b style="color: #0f172a;">{tdata.get('rate_limit_per_sec')} req/s</b></div>
+                    <div style="color: #475569; font-size: 13px;">Total Served: <b style="color: #0f172a;">{tdata.get('total_requests')} reqs</b></div>
                 </div>
                 """, unsafe_allow_html=True)
                 
