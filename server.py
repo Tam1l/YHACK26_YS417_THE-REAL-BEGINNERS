@@ -6,6 +6,7 @@ from typing import Optional, Literal
 
 import redis
 from fastapi import FastAPI, HTTPException, Header, Depends, status, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 import rads
@@ -86,6 +87,14 @@ class PredictRequest(BaseModel):
     image_base64: str
 
 app = FastAPI(title="RoboNexus — Robotics-Aware Private AI Cloud", version="2.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 @app.get("/health")

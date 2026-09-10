@@ -171,6 +171,533 @@ auto_refresh = st.sidebar.checkbox("🔄 Auto-Refresh UI (500ms)", value=True)
 
 # ================= MAIN VIEW =================
 st.title("🤖 RoboNexus — Robotics-Aware Private AI Cloud")
+
+
+import streamlit.components.v1 as components
+
+ARENA_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+        #container {
+            position: relative;
+            width: 100%;
+            height: 520px;
+            background: radial-gradient(circle at center, #111827 0%, #080c14 100%);
+            border: 2px solid #1e293b;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .hud-panel {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 8px 12px;
+            pointer-events: auto;
+            z-index: 10;
+        }
+        #controls {
+            bottom: 12px;
+            left: 12px;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            background: #1e293b;
+            color: #e2e8f0;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .btn-danger {
+            background: #991b1b;
+            border-color: #ef4444;
+            color: white;
+        }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-primary {
+            background: #1d4ed8;
+            border-color: #3b82f6;
+            color: white;
+        }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-warning {
+            background: #854d0e;
+            border-color: #eab308;
+            color: white;
+        }
+        #banner {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            display: none;
+            z-index: 20;
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse {
+            from { opacity: 0.85; }
+            to { opacity: 1.0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="arenaCanvas"></canvas>
+        <div id="banner"></div>
+        <div id="controls" class="hud-panel">
+            <button class="btn btn-primary" id="btnPlayPause">⏸ Pause Fleet</button>
+            <button class="btn btn-danger" id="btnEmergency">🚨 TRIGGER EMERGENCY COLLISION</button>
+            <button class="btn btn-warning" id="btnKillWorker">🔥 KILL WORKER-1 (FAILOVER)</button>
+            <button class="btn" id="btnReset">🧹 Clear Hazard</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('arenaCanvas');
+        const ctx = canvas.getContext('2d');
+        const banner = document.getElementById('banner');
+
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let isRunning = true;
+        let humanHazard = false;
+        let humanPos = { x: 580, y: 260 };
+        let worker1Alive = true;
+        let worker2Alive = true;
+        let latestLatency = 17.4;
+        let queueList = [
+            { id: 'DRONE-07', crit: 'HIGH', p: 2, color: '#38bdf8' },
+            { id: 'SWEEPER-12', crit: 'NORMAL', p: 5, color: '#34d399' },
+            { id: 'SCANNER-09', crit: 'LOW', p: 9, color: '#94a3b8' }
+        ];
+
+        // Robots
+        const agv = {
+            id: 'AGV-01',
+            x: 80,
+            y: 260,
+            targetX: 840,
+            speed: 2.2,
+            crit: 'CRITICAL',
+            color: '#ef4444',
+            status: 'NORMAL',
+            beamActive: false
+        };
+
+        const drone = {
+            id: 'DRONE-07',
+            x: 240,
+            y: 110,
+            angle: 0,
+            color: '#38bdf8'
+        };
+
+        const sweeper = {
+            id: 'SWEEPER-12',
+            x: 320,
+            y: 410,
+            dir: 1,
+            color: '#34d399'
+        };
+
+        // Telemetry packets in-flight
+        let packets = [];
+
+        function showBanner(text, bg, border) {
+            banner.innerText = text;
+            banner.style.background = bg;
+            banner.style.border = '1px solid ' + border;
+            banner.style.display = 'block';
+            setTimeout(() => { banner.style.display = 'none'; }, 4500);
+        }
+
+        // Trigger Emergency Collision Test (Preemption Demo)
+        document.getElementById('btnEmergency').onclick = async () => {
+            humanHazard = true;
+            agv.x = Math.min(agv.x, 380);
+            
+            // Visual packet fly
+            packets.push({ fromX: agv.x, fromY: agv.y, toX: canvas.width - 110, toY: 60, progress: 0, color: '#ef4444' });
+
+            // Insert into front of queue (RADS line-cutting!)
+            queueList.unshift({ id: 'AGV-01 [CRITICAL]', crit: 'CRITICAL', p: 1, color: '#ef4444' });
+            
+            showBanner("🚨 RADS PREEMPTION ACTIVATED! AGV Emergency Collision Task Jumped to Queue #1", "rgba(185, 28, 28, 0.9)", "#ef4444");
+
+            // Actual call to FastAPI backend
+            try {
+                const resp = await fetch('http://127.0.0.1:8000/api/v1/inference', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Robot-Token': 'robot-token-secret' },
+                    body: JSON.stringify({
+                        robot_id: 'AGV-01',
+                        task_type: 'collision_avoidance',
+                        criticality: 'CRITICAL',
+                        deadline_ms: 100.0,
+                        image_base64: 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAF0lEQVR42mP8z8BQDMaRRtRRcxw1x5EGAH5/4R4PshlNAAAAAElFTkSuQmCC'
+                    })
+                });
+                const data = await resp.json();
+                setTimeout(async () => {
+                    const res = await fetch(`http://127.0.0.1:8000/api/v1/inference/${data.request_id}/result`, {
+                        headers: { 'X-Robot-Token': 'robot-token-secret' }
+                    });
+                    const rData = await res.json();
+                    if (rData.inference_ms) latestLatency = rData.inference_ms;
+                }, 300);
+            } catch(e) {}
+        };
+
+        // Kill Worker 1 (Failover Demo)
+        document.getElementById('btnKillWorker').onclick = async () => {
+            worker1Alive = !worker1Alive;
+            const btn = document.getElementById('btnKillWorker');
+            if (!worker1Alive) {
+                btn.innerText = "💚 RESTORE WORKER-1";
+                btn.className = "btn btn-primary";
+                showBanner("⚠️ WORKER-1 CRASHED! Failover Monitor requeuing jobs -> Worker-2 Taking Over!", "rgba(180, 83, 9, 0.9)", "#f59e0b");
+                try { await fetch('http://127.0.0.1:8000/api/v1/debug/workers/worker-1/fail', { method: 'POST' }); } catch(e) {}
+            } else {
+                btn.innerText = "🔥 KILL WORKER-1 (FAILOVER)";
+                btn.className = "btn btn-warning";
+                showBanner("✅ Worker-1 Restored to Healthy State", "rgba(16, 185, 129, 0.9)", "#10b981");
+                try { await fetch('http://127.0.0.1:8000/api/v1/debug/workers/worker-1/recover', { method: 'POST' }); } catch(e) {}
+            }
+        };
+
+        document.getElementById('btnReset').onclick = () => {
+            humanHazard = false;
+            agv.status = 'NORMAL';
+            agv.x = 80;
+            queueList = queueList.filter(q => !q.id.includes('CRITICAL'));
+            showBanner("Facility Corridor Cleared - Autonomous Traffic Resumed", "rgba(30, 41, 59, 0.9)", "#3b82f6");
+        };
+
+        document.getElementById('btnPlayPause').onclick = () => {
+            isRunning = !isRunning;
+            document.getElementById('btnPlayPause').innerText = isRunning ? "⏸ Pause Fleet" : "▶ Resume Fleet";
+        };
+
+        function drawWarehouse() {
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Grid
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < w; x += 40) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+            }
+            for (let y = 0; y < h; y += 40) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+            }
+
+            // Storage Racks
+            const racks = [
+                { x: 120, y: 50, w: 180, h: 45, label: "RACK AISLE A1" },
+                { x: 360, y: 50, w: 180, h: 45, label: "RACK AISLE A2" },
+                { x: 600, y: 50, w: 180, h: 45, label: "RACK AISLE A3" },
+                { x: 120, y: 410, w: 180, h: 45, label: "RACK AISLE B1" },
+                { x: 360, y: 410, w: 180, h: 45, label: "RACK AISLE B2" },
+                { x: 600, y: 410, w: 180, h: 45, label: "RACK AISLE B3" }
+            ];
+
+            racks.forEach(r => {
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(r.x, r.y, r.w, r.h);
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+                ctx.fillStyle = '#64748b';
+                ctx.font = '10px monospace';
+                ctx.fillText(r.label, r.x + 12, r.y + 26);
+
+                // Shelf boxes
+                for (let b = 0; b < 4; b++) {
+                    ctx.fillStyle = (b % 2 === 0) ? '#d97706' : '#0284c7';
+                    ctx.fillRect(r.x + 105 + (b * 16), r.y + 12, 12, 20);
+                }
+            });
+
+            // Highway Transit Lane
+            ctx.fillStyle = 'rgba(30, 41, 59, 0.4)';
+            ctx.fillRect(0, 220, w, 80);
+            ctx.strokeStyle = '#eab308';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([12, 12]);
+            ctx.beginPath();
+            ctx.moveTo(0, 260); ctx.lineTo(w, 260);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Charging Pad
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+            ctx.fillRect(40, 70, 50, 50);
+            ctx.strokeStyle = '#10b981';
+            ctx.strokeRect(40, 70, 50, 50);
+            ctx.fillStyle = '#10b981';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillText("CHARGER", 42, 100);
+        }
+
+        function drawCloudHub() {
+            const w = canvas.width;
+            const hubX = w - 180;
+            const hubY = 16;
+            const hubW = 165;
+            const hubH = 95;
+
+            // Box
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+            ctx.fillRect(hubX, hubY, hubW, hubH);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(hubX, hubY, hubW, hubH);
+
+            ctx.fillStyle = '#38bdf8';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText("☁️ PRIVATE AI CLOUD", hubX + 12, hubY + 20);
+
+            // Workers
+            ctx.fillStyle = worker1Alive ? '#10b981' : '#ef4444';
+            ctx.beginPath(); ctx.arc(hubX + 22, hubY + 45, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = '11px monospace';
+            ctx.fillText(`Worker-1: ${worker1Alive ? 'ONLINE' : 'DEAD'}`, hubX + 36, hubY + 49);
+
+            ctx.fillStyle = worker2Alive ? '#10b981' : '#ef4444';
+            ctx.beginPath(); ctx.arc(hubX + 22, hubY + 70, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillText(`Worker-2: ONLINE`, hubX + 36, hubY + 74);
+        }
+
+        function drawQueueHUD() {
+            const qX = 14;
+            const qY = 14;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+            ctx.fillRect(qX, qY, 210, 85);
+            ctx.strokeStyle = '#6366f1';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(qX, qY, 210, 85);
+
+            ctx.fillStyle = '#a5b4fc';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText("⚡ RADS PRIORITY QUEUE", qX + 10, qY + 18);
+
+            queueList.slice(0, 3).forEach((item, idx) => {
+                const yPos = qY + 36 + (idx * 16);
+                ctx.fillStyle = item.color;
+                ctx.fillRect(qX + 10, yPos - 9, 8, 8);
+                ctx.fillStyle = '#f1f5f9';
+                ctx.font = '10px monospace';
+                ctx.fillText(`#${idx + 1} ${item.id} (P${item.p})`, qX + 24, yPos);
+            });
+        }
+
+        function drawCameraHUD() {
+            const w = canvas.width;
+            const hudW = 195;
+            const hudH = 135;
+            const hudX = w - hudW - 14;
+            const hudY = canvas.height - hudH - 14;
+
+            ctx.fillStyle = 'rgba(10, 15, 26, 0.92)';
+            ctx.fillRect(hudX, hudY, hudW, hudH);
+            ctx.strokeStyle = '#06b6d4';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(hudX, hudY, hudW, hudH);
+
+            ctx.fillStyle = '#06b6d4';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText("👁️ AGV VISION CAM [YOLOv8]", hudX + 10, hudY + 18);
+
+            // Bounding box if human present
+            if (humanHazard) {
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(hudX + 50, hudY + 35, 95, 60);
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(hudX + 50, hudY + 23, 95, 14);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 9px sans-serif';
+                ctx.fillText("HUMAN DETECT 98.4%", hudX + 54, hudY + 34);
+
+                ctx.fillStyle = '#ef4444';
+                ctx.font = 'bold 11px monospace';
+                ctx.fillText("STATUS: EMERGENCY STOP", hudX + 10, hudY + 118);
+            } else {
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(hudX + 30, hudY + 45, 135, 45);
+                ctx.fillStyle = '#10b981';
+                ctx.font = '9px monospace';
+                ctx.fillText("CORRIDOR CLEAR (P=0.97)", hudX + 35, hudY + 40);
+
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '10px monospace';
+                ctx.fillText(`LATENCY: ${latestLatency.toFixed(1)}ms [MET ✅]`, hudX + 10, hudY + 118);
+            }
+        }
+
+        function update() {
+            if (isRunning) {
+                // AGV logic
+                if (humanHazard) {
+                    const dist = humanPos.x - agv.x;
+                    if (dist > 75) {
+                        agv.x += agv.speed;
+                    } else {
+                        agv.status = 'STOPPED';
+                    }
+                } else {
+                    agv.x += agv.speed;
+                    if (agv.x > canvas.width - 60) agv.x = 40;
+                }
+
+                // Drone hovering
+                drone.angle += 0.04;
+                drone.x = 260 + Math.sin(drone.angle) * 80;
+                drone.y = 110 + Math.cos(drone.angle) * 20;
+
+                // Sweeper back and forth
+                sweeper.x += 1.2 * sweeper.dir;
+                if (sweeper.x > 620) sweeper.dir = -1;
+                if (sweeper.x < 140) sweeper.dir = 1;
+
+                // Telemetry packets
+                packets.forEach(p => { p.progress += 0.04; });
+                packets = packets.filter(p => p.progress < 1.0);
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawWarehouse();
+
+            // Draw Human if hazard
+            if (humanHazard) {
+                ctx.fillStyle = '#f87171';
+                ctx.beginPath(); ctx.arc(humanPos.x, humanPos.y - 14, 8, 0, Math.PI * 2); ctx.fill();
+                ctx.fillRect(humanPos.x - 6, humanPos.y - 6, 12, 22);
+                ctx.strokeStyle = '#ef4444';
+                ctx.strokeRect(humanPos.x - 14, humanPos.y - 26, 28, 48);
+
+                ctx.fillStyle = '#ef4444';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.fillText("HAZARD", humanPos.x - 20, humanPos.y - 32);
+            }
+
+            // AGV Robot
+            ctx.fillStyle = agv.status === 'STOPPED' ? '#ef4444' : '#dc2626';
+            ctx.fillRect(agv.x - 22, agv.y - 15, 44, 30);
+            ctx.strokeStyle = agv.status === 'STOPPED' ? '#fca5a5' : '#f87171';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(agv.x - 22, agv.y - 15, 44, 30);
+
+            // Light cone
+            ctx.fillStyle = agv.status === 'STOPPED' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(234, 179, 8, 0.15)';
+            ctx.beginPath();
+            ctx.moveTo(agv.x + 22, agv.y);
+            ctx.lineTo(agv.x + 100, agv.y - 35);
+            ctx.lineTo(agv.x + 100, agv.y + 35);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 9px sans-serif';
+            ctx.fillText(agv.id, agv.x - 18, agv.y + 3);
+
+            // Drone
+            ctx.fillStyle = '#0284c7';
+            ctx.fillRect(drone.x - 12, drone.y - 12, 24, 24);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.strokeRect(drone.x - 12, drone.y - 12, 24, 24);
+            // Drone beam
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+            ctx.beginPath();
+            ctx.moveTo(drone.x, drone.y);
+            ctx.lineTo(drone.x - 30, drone.y + 70);
+            ctx.lineTo(drone.x + 30, drone.y + 70);
+            ctx.closePath();
+            ctx.fill();
+
+            // Sweeper
+            ctx.fillStyle = '#059669';
+            ctx.beginPath(); ctx.arc(sweeper.x, sweeper.y, 14, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#34d399';
+            ctx.stroke();
+
+            // Packets in flight
+            packets.forEach(p => {
+                const curX = p.fromX + (p.toX - p.fromX) * p.progress;
+                const curY = p.fromY + (p.toY - p.fromY) * p.progress;
+                ctx.fillStyle = p.color;
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 8;
+                ctx.beginPath(); ctx.arc(curX, curY, 5, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            drawCloudHub();
+            drawQueueHUD();
+            drawCameraHUD();
+        }
+
+        function loop() {
+            update();
+            render();
+            requestAnimationFrame(loop);
+        }
+        loop();
+    </script>
+</body>
+</html>
+"""
+
+components.html(ARENA_HTML, height=530)
+
 st.caption("Shared Edge AI Compute • RADS Dynamic Scheduling • Multi-Worker Fault Tolerance")
 
 # Top Telemetry Cards
