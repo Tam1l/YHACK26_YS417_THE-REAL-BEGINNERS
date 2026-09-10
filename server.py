@@ -1,4 +1,4 @@
-﻿import os
+import os
 import uuid
 import base64
 import time
@@ -8,6 +8,7 @@ import redis
 from fastapi import FastAPI, HTTPException, Header, Depends, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
+from rads import deadline_risk, rads_score
 
 import rads
 
@@ -93,6 +94,8 @@ class PredictRequest(BaseModel):
     robot_id: str = Field(..., description="Unique identifier of the robot")
     priority: int = Field(..., ge=1, le=9, description="Priority: 1 is Highest, 9 is Lowest")
     image_base64: str = Field(..., description="Base64-encoded JPEG/PNG image")
+    deadline_ms: int = Field(1000, ge=50, le=60000)
+    estimated_inference_ms: int = Field(25, ge=1, le=10000)
 
     @field_validator("image_base64")
     @classmethod
@@ -192,6 +195,10 @@ def predict(request: PredictRequest, auth=Depends(verify_token)):
         task_id = str(uuid.uuid4())
         task_key = f"task:{task_id}"
         now = time.time()
+        now_ms = now * 1000
+        criticality = "CRITICAL" if request.priority == 1 else ("HIGH" if request.priority <= 2 else ("NORMAL" if request.priority <= 5 else "LOW"))
+        queue_delay_ms = int(redis_client.zcard("queue:tasks")) * request.estimated_inference_ms
+        risk = deadline_risk(now_ms, request.deadline_ms, now_ms, queue_delay_ms, request.estimated_inference_ms)
         
         crit_str = "CRITICAL" if request.priority == 1 else ("HIGH" if request.priority == 2 else ("NORMAL" if request.priority == 5 else "LOW"))
         deadline_val = 150.0 if request.priority == 1 else 500.0
@@ -209,6 +216,8 @@ def predict(request: PredictRequest, auth=Depends(verify_token)):
             "rads_score": str(rads_val),
             "queue_score": str(queue_score),
             "created_ts": str(now),
+            "deadline_at": str(now + request.deadline_ms / 1000),
+            "deadline_risk": risk,
             "retry_count": "0"
         })
         
@@ -223,6 +232,7 @@ def predict(request: PredictRequest, auth=Depends(verify_token)):
             "rads_score": rads_val,
             "state": "queued",
             "submitted_at": now
+            ,"deadline_risk": risk
         }
     except HTTPException:
         raise

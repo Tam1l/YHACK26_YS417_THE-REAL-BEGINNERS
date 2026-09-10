@@ -949,7 +949,6 @@ with tab2:
             "P95 Latency (ms)": [780.0, 24.5]
         })
         st.bar_chart(lat_data.set_index("Scheduler"), color=["#3b82f6"])
-
 with tab3:
     col_img, col_hist = st.columns([1, 1])
     with col_img:
@@ -999,7 +998,8 @@ with tab3:
                         "Worker": d.get("assigned_worker", "-"),
                         "Status": d.get("state", "-").upper(),
                         "Latency": f"{float(d.get('inference_time_ms', 0)):.1f}ms" if d.get("inference_time_ms") else "-",
-                        "Deadline Met": "YES" if d.get("deadline_met") == "true" else ("NO" if d.get("state") == "completed" else "-")
+                        "Deadline Met": "YES" if d.get("deadline_met") == "true" else ("NO" if d.get("state") == "completed" else "-"),
+                        "Deadline Risk": d.get("deadline_risk", "-")
                     })
             if h_rows:
                 st.dataframe(pd.DataFrame(h_rows), width="stretch", hide_index=True)
