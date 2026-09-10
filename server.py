@@ -2,7 +2,7 @@
 import uuid
 import base64
 import time
-from typing import Optional, Literal
+from typing import Optional
 
 import redis
 from fastapi import FastAPI, HTTPException, Header, Depends, status, Query
@@ -25,8 +25,16 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 JWT_SECRET = os.getenv("JWT_SECRET", "supersecret")
 JWT_ALGORITHM = "HS256"
 
-raw_tokens = os.getenv("ROBOT_TOKENS", "robot-token-secret,agv-token,drone-token")
-PRE_SHARED_TOKENS = set(filter(None, [t.strip() for t in raw_tokens.split(",")]))
+# Spec Section 29: Server-Side Robot Authorization Policies
+ROBOT_POLICIES = {
+    "robot-token-secret": {"robot_id": "AGV-01", "max_priority": 1, "max_criticality": "CRITICAL"},
+    "agv-token": {"robot_id": "AGV-01", "max_priority": 1, "max_criticality": "CRITICAL"},
+    "drone-token": {"robot_id": "DRONE-07", "max_priority": 2, "max_criticality": "HIGH"},
+    "sweeper-token": {"robot_id": "SWEEPER-12", "max_priority": 5, "max_criticality": "NORMAL"},
+}
+
+raw_tokens = os.getenv("ROBOT_TOKENS", "robot-token-secret,agv-token,drone-token,sweeper-token")
+PRE_SHARED_TOKENS = set(filter(None, [t.strip() for t in raw_tokens.split(",")])) | set(ROBOT_POLICIES)
 
 redis_client = redis.StrictRedis(
     host=REDIS_HOST,
@@ -48,23 +56,24 @@ def verify_token(
     x_robot_token: Optional[str] = Header(None, alias="X-Robot-Token"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
+    token = x_robot_token or x_api_key
     if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1)[1]
+        jwt_raw = authorization.split(" ", 1)[1]
         if JWT_AVAILABLE:
             try:
-                return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                return jwt.decode(jwt_raw, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             except Exception:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid JWT token")
-        return {"token": token}
+        return {"token": jwt_raw}
 
-    token = x_robot_token or x_api_key
-    if token and (token in PRE_SHARED_TOKENS or not PRE_SHARED_TOKENS):
-        return {"robot_token": token}
+    if token:
+        if token in PRE_SHARED_TOKENS:
+            policy = ROBOT_POLICIES.get(token, {"robot_token": token, "max_priority": 9, "max_criticality": "LOW"})
+            return policy
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or unknown robot credentials")
 
-    if not authorization and not x_robot_token and not x_api_key:
-        return {"auth": "default_dev_bypass"}
-
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid authentication credentials")
+    # In development, fallback only if no token is passed
+    return {"auth": "default_dev_bypass"}
 
 class InferenceSubmission(BaseModel):
     robot_id: str = Field(..., description="Unique identifier of the robot")
@@ -80,11 +89,17 @@ class InferenceSubmission(BaseModel):
             raise ValueError("image_base64 payload cannot be empty")
         return v
 
-# Legacy support request model
 class PredictRequest(BaseModel):
-    robot_id: str
-    priority: int = Field(..., ge=1, le=9)
-    image_base64: str
+    robot_id: str = Field(..., description="Unique identifier of the robot")
+    priority: int = Field(..., ge=1, le=9, description="Priority: 1 is Highest, 9 is Lowest")
+    image_base64: str = Field(..., description="Base64-encoded JPEG/PNG image")
+
+    @field_validator("image_base64")
+    @classmethod
+    def validate_image_base64(cls, v: str) -> str:
+        if not v:
+            raise ValueError("image_base64 cannot be empty")
+        return v
 
 app = FastAPI(title="RoboNexus — Robotics-Aware Private AI Cloud", version="2.0.0")
 
@@ -104,7 +119,6 @@ def health():
     except Exception:
         r_ping = False
     
-    # Check worker health count
     w1_ok = (redis_client.hget("worker:worker-1", "healthy") == "true")
     w2_ok = (redis_client.hget("worker:worker-2", "healthy") == "true")
     healthy_workers = sum([1 for ok in (w1_ok, w2_ok) if ok])
@@ -119,28 +133,35 @@ def health():
 
 @app.post("/api/v1/inference", status_code=status.HTTP_201_CREATED)
 def submit_inference(request: InferenceSubmission, auth=Depends(verify_token)):
+    # Policy checks
+    crit_str = request.criticality.upper()
+    priority_num = 1 if crit_str == "CRITICAL" else (2 if crit_str == "HIGH" else (5 if crit_str == "NORMAL" else 9))
+    
+    if "max_priority" in auth and priority_num < auth["max_priority"]:
+        raise HTTPException(status_code=403, detail="Requested priority exceeds robot policy")
+    if auth.get("robot_id") and request.robot_id != auth["robot_id"]:
+        raise HTTPException(status_code=403, detail="Robot ID does not match authenticated token")
+
     task_id = str(uuid.uuid4())
     task_key = f"task:{task_id}"
     now = time.time()
     
-    # Compute RADS scheduling score
-    rads_score = rads.compute_rads_score(
-        criticality=request.criticality.upper(),
+    rads_val = rads.compute_rads_score(
+        criticality=crit_str,
         deadline_ms=request.deadline_ms,
         created_ts=now
     )
-    # ZPOPMIN: score is -rads_score (highest RADS score pops first)
-    queue_score = -rads_score
+    queue_score = -rads_val
     
     redis_client.hset(task_key, mapping={
         "task_id": task_id,
         "robot_id": request.robot_id,
         "task_type": request.task_type,
-        "criticality": request.criticality.upper(),
+        "criticality": crit_str,
         "deadline_ms": str(request.deadline_ms),
         "image_base64": request.image_base64,
         "state": "queued",
-        "rads_score": str(rads_score),
+        "rads_score": str(rads_val),
         "queue_score": str(queue_score),
         "created_ts": str(now),
         "retry_count": "0"
@@ -153,39 +174,77 @@ def submit_inference(request: InferenceSubmission, auth=Depends(verify_token)):
     return {
         "request_id": task_id,
         "robot_id": request.robot_id,
-        "criticality": request.criticality.upper(),
-        "rads_score": rads_score,
+        "criticality": crit_str,
+        "rads_score": rads_val,
         "status": "QUEUED",
         "submitted_at": now
     }
 
-# Legacy POST /predict support
 @app.post("/predict", status_code=status.HTTP_201_CREATED)
-def predict_legacy(request: PredictRequest, auth=Depends(verify_token)):
-    crit = "CRITICAL" if request.priority == 1 else ("HIGH" if request.priority == 2 else ("NORMAL" if request.priority == 5 else "LOW"))
-    sub = InferenceSubmission(
-        robot_id=request.robot_id,
-        criticality=crit,
-        deadline_ms=150.0 if request.priority == 1 else 500.0,
-        image_base64=request.image_base64
-    )
-    res = submit_inference(sub, auth=auth)
-    return {"task_id": res["request_id"], "priority": request.priority, "state": "queued"}
+def predict(request: PredictRequest, auth=Depends(verify_token)):
+    try:
+        # Policy enforcement
+        if "max_priority" in auth and request.priority < auth["max_priority"]:
+            raise HTTPException(status_code=403, detail="Requested priority exceeds robot policy")
+        if auth.get("robot_id") and request.robot_id != auth["robot_id"]:
+            raise HTTPException(status_code=403, detail="Robot ID does not match authenticated token")
+
+        task_id = str(uuid.uuid4())
+        task_key = f"task:{task_id}"
+        now = time.time()
+        
+        crit_str = "CRITICAL" if request.priority == 1 else ("HIGH" if request.priority == 2 else ("NORMAL" if request.priority == 5 else "LOW"))
+        deadline_val = 150.0 if request.priority == 1 else 500.0
+        rads_val = rads.compute_rads_score(crit_str, deadline_val, now)
+        queue_score = -rads_val
+        
+        redis_client.hset(task_key, mapping={
+            "task_id": task_id,
+            "robot_id": request.robot_id,
+            "priority": str(request.priority),
+            "criticality": crit_str,
+            "deadline_ms": str(deadline_val),
+            "image_base64": request.image_base64,
+            "state": "queued",
+            "rads_score": str(rads_val),
+            "queue_score": str(queue_score),
+            "created_ts": str(now),
+            "retry_count": "0"
+        })
+        
+        redis_client.zadd("queue:tasks", {task_id: queue_score})
+        redis_client.lpush("history:tasks", task_id)
+        redis_client.ltrim("history:tasks", 0, 99)
+        
+        return {
+            "task_id": task_id,
+            "robot_id": request.robot_id,
+            "priority": request.priority,
+            "rads_score": rads_val,
+            "state": "queued",
+            "submitted_at": now
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Queue Error: {str(e)}")
 
 @app.get("/api/v1/inference/{request_id}/result")
 @app.get("/result/{request_id}")
-def get_inference_result(request_id: str, auth=Depends(verify_token)):
+def get_result(request_id: str, auth=Depends(verify_token)):
     task_key = f"task:{request_id}"
     if not redis_client.exists(task_key):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inference request ID not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task ID not found")
     
     data = redis_client.hgetall(task_key)
     state = data.get("state", "unknown")
-    
-    resp = {
+    response = {
+        "task_id": request_id,
         "request_id": request_id,
         "robot_id": data.get("robot_id"),
+        "priority": int(data.get("priority", 5)),
         "criticality": data.get("criticality", "NORMAL"),
+        "state": state,
         "status": state.upper(),
         "assigned_worker": data.get("assigned_worker", ""),
         "created_ts": data.get("created_ts"),
@@ -193,7 +252,7 @@ def get_inference_result(request_id: str, auth=Depends(verify_token)):
     }
     
     if state == "completed":
-        resp.update({
+        response.update({
             "deadline_met": (data.get("deadline_met") == "true"),
             "inference_ms": float(data.get("inference_time_ms", 0.0)),
             "total_latency_ms": float(data.get("total_latency_ms", 0.0)),
@@ -202,13 +261,13 @@ def get_inference_result(request_id: str, auth=Depends(verify_token)):
                 "classes": data.get("classes"),
                 "confidences": data.get("confidences"),
                 "detection_count": int(data.get("detection_count", 0)),
-                "inference_time_ms": float(data.get("inference_time_ms", 0.0))
+                "inference_time_ms": float(data.get("inference_time_ms", 0.0)),
             }
         })
     elif state == "failed":
-        resp["error"] = data.get("error_message", "Worker processing failure")
+        response["error"] = data.get("error_message", "Unknown worker processing error")
         
-    return resp
+    return response
 
 @app.get("/api/v1/metrics")
 def get_system_metrics():
@@ -233,16 +292,13 @@ def get_system_metrics():
         "failovers_recovered": failovers
     }
 
-# Spec Section 46: Debug Failure Injection Endpoint for Live Demo
 @app.post("/api/v1/debug/workers/{worker_id}/fail")
 def inject_worker_failure(worker_id: str):
-    """Simulates abrupt worker crash mid-operation to demonstrate automatic failover."""
     redis_client.set(f"debug:fail:{worker_id}", "1")
     return {"status": "injected", "worker_id": worker_id, "action": "worker killed"}
 
 @app.post("/api/v1/debug/workers/{worker_id}/recover")
 def recover_worker(worker_id: str):
-    """Restores worker from failure state."""
     redis_client.delete(f"debug:fail:{worker_id}")
     redis_client.hset(f"worker:{worker_id}", "status", "IDLE")
     redis_client.hset(f"worker:{worker_id}", "healthy", "true")

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import json
 import base64
@@ -20,7 +20,7 @@ redis_client = redis.StrictRedis(
     db=REDIS_DB,
     password=REDIS_PASSWORD,
     decode_responses=True,
-    protocol=2
+    protocol=2,
 )
 
 try:
