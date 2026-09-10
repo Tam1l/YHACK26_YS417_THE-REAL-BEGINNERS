@@ -89,35 +89,42 @@
             <div class="panel-divider"></div>
             <h3>Live YOLO camera</h3>
             <p class="panel-help">The camera stays off until you choose to take a photo. Uploaded images are processed through RADS and YOLO.</p>
-            <button class="btn btn-secondary panel-button" id="btnSideCamera">Open robot camera</button>
+
+            <div class="panel-action-group">
+                <button class="btn btn-secondary" id="btnSideCamera">📷 Camera</button>
+                <button class="btn btn-primary" id="btnSideUpload">⬆ Upload</button>
+            </div>
+
             <div class="camera-preview" id="sideCameraPreview" hidden>
                 <button class="camera-shutter" id="btnCameraPreviewCapture" title="Click the live camera image to capture a photo">
                     <video id="sideCameraVideo" autoplay muted playsinline></video>
                     <span>Click live preview to capture</span>
                 </button>
                 <div class="camera-preview-actions">
-                    <button class="btn btn-primary" id="btnCaptureCamera">Capture and run YOLO</button>
-                    <button class="btn btn-slate" id="btnCloseCamera">Close camera</button>
+                    <button class="btn btn-primary" id="btnCaptureCamera">Capture &amp; YOLO</button>
+                    <button class="btn btn-slate" id="btnCloseCamera">✕ Close</button>
                 </div>
             </div>
             <div class="operator-image-card" id="sideCapturedImageCard" hidden>
                 <div class="operator-image-label">Latest operator frame</div>
                 <img id="sideCapturedImage" alt="Latest camera or uploaded image submitted to YOLO">
             </div>
-            <button class="btn btn-primary panel-button" id="btnSideUpload">Upload JPEG / PNG</button>
-            <label class="panel-check"><input id="sideAutoYolo" type="checkbox" checked> Process each selected photo automatically</label>
-            <button class="btn btn-slate panel-button" id="btnSideRunYolo" disabled>Run Real YOLO Inference</button>
+
+            <label class="panel-check"><input id="sideAutoYolo" type="checkbox" checked> Auto-run YOLO on each photo</label>
+            <button class="btn btn-slate panel-button" id="btnSideRunYolo" disabled>🔍 Run Real YOLO Inference</button>
             <div id="sideVisionStatus" class="panel-status">Waiting for an operator photo</div>
 
             <div class="panel-divider"></div>
             <h3>Quick operations</h3>
-            <button class="panel-link" data-side-tab="tabFabric">Dynamic worker fabric</button>
-            <button class="panel-link" data-side-tab="tabAutoscaler">Elastic autoscaler</button>
-            <button class="panel-link" data-side-tab="tabTenants">Fleet RBAC and quotas</button>
-            <button class="panel-link" data-side-tab="tabIncidents">S3 black-box incidents</button>
-            <button class="panel-link" data-side-tab="tabBenchmarks">YOLO vision feed</button>
+            <div class="panel-links-group">
+                <button class="panel-link" data-side-tab="tabFabric">Dynamic worker fabric</button>
+                <button class="panel-link" data-side-tab="tabAutoscaler">Elastic autoscaler</button>
+                <button class="panel-link" data-side-tab="tabTenants">Fleet RBAC and quotas</button>
+                <button class="panel-link" data-side-tab="tabIncidents">S3 black-box incidents</button>
+                <button class="panel-link" data-side-tab="tabBenchmarks">YOLO vision feed</button>
+            </div>
             <div class="panel-divider"></div>
-            <button class="btn btn-slate panel-button" id="btnSideReset">Reset system and workers</button>
+            <button class="btn btn-slate panel-button" id="btnSideReset">🧹 Reset system and workers</button>
         </aside>
 
         <!-- Main Container -->
