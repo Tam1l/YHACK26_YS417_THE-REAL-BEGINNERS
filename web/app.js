@@ -191,11 +191,6 @@ function drawWarehouse() {
         ctx.fillText(`${dm}m`, dx - 6, 262);
     }
 
-    // Highway Corridor Label
-    ctx.fillStyle = light ? '#475569' : '#94a3b8';
-    ctx.font = 'bold 10px monospace';
-    ctx.fillText("AGV HIGH-SPEED TRANSIT CORRIDOR [LANE-01: ISO 3691-4 PROTECTED]", 260, 274);
-
     // Fleet Autonomous Fast-Dock (Top Center: x: (w-200)/2, y: 12, h: 74)
     const dockW = 200, dockH = 74;
     const dockX = Math.max(260, Math.floor((w - dockW) / 2));
@@ -228,9 +223,6 @@ function drawWarehouse() {
     ctx.moveTo(30, 205); ctx.lineTo(w - 30, 205);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = light ? '#0284c7' : '#38bdf8';
-    ctx.font = '8.5px monospace';
-    ctx.fillText("✈️ AERIAL INSPECTION FLIGHT CORRIDOR (ALTITUDE: 4.8m)", 260, 218);
 
     // Lower Floor Maintenance Apron: y = 338 to 414 (height: 76)
     // Clearance between Highway and Lower Racks is 76px! Sweeper sweeps at y = 374!
@@ -240,9 +232,6 @@ function drawWarehouse() {
     ctx.moveTo(30, 374); ctx.lineTo(w - 270, 374);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = light ? '#059669' : '#34d399';
-    ctx.font = '8.5px monospace';
-    ctx.fillText("🧹 AISLE 02 [LEVEL 0: FLOOR SANITIZATION & DUST SCRUBBING ZONE]", 24, 360);
 
     // Lower Floor Racks: y = 414 to 474 (height: 60)
     // Clearance below Highway is 76px; clearance below Racks is 96px!

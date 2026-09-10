@@ -773,11 +773,6 @@ ARENA_HTML = """
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Highway Corridor Label
-            ctx.fillStyle = '#64748b';
-            ctx.font = 'bold 10px monospace';
-            ctx.fillText("AGV HIGH-SPEED TRANSIT CORRIDOR [LANE-01]", 260, 240);
-
             // Fleet Autonomous Charging Dock (Top Center: between Queue HUD and Cloud Hub)
             const dockX = Math.max(260, Math.floor((w - 180) / 2));
             const dockY = 14;
@@ -811,9 +806,6 @@ ARENA_HTML = """
             ctx.moveTo(30, 205); ctx.lineTo(w - 30, 205);
             ctx.stroke();
             ctx.setLineDash([]);
-            ctx.fillStyle = '#0284c7';
-            ctx.font = '8.5px monospace';
-            ctx.fillText("✈️ AERIAL INSPECTION FLIGHT CORRIDOR (ALTITUDE: 4.8m)", 260, 218);
 
             // Lower Floor Maintenance Apron: Sweeper sweeps along y = 338
             ctx.strokeStyle = 'rgba(5, 150, 105, 0.25)';
@@ -822,9 +814,6 @@ ARENA_HTML = """
             ctx.moveTo(30, 338); ctx.lineTo(w - 270, 338);
             ctx.stroke();
             ctx.setLineDash([]);
-            ctx.fillStyle = '#059669';
-            ctx.font = '8.5px monospace';
-            ctx.fillText("🧹 AISLE 02 [LEVEL 0: FLOOR SANITIZATION & DUST SCRUBBING ZONE]", 24, 324);
 
             // Lower Floor Storage Racks (Level 0: Perimeter Staging & Buffer)
             drawRack(24, 380, 240, 60, '#34d399', 'RACK-C [INVENTORY & RAW]', 'LEVEL 0: SWEEPER AISLE PERIMETER', true);
