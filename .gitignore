@@ -8,3 +8,5 @@ generate_files.py
 patch_failsafe.py
 patch_redis.py
 YHACK26_YS417_THE-REAL-BEGINNERS/
+storage/incidents/*.json
+!storage/incidents/.gitkeep

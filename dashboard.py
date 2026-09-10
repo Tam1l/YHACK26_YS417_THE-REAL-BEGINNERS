@@ -8,6 +8,8 @@ import redis
 import pandas as pd
 from PIL import Image, ImageDraw
 import streamlit as st
+import fleet_tenants
+import incident_archiver
 
 REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -133,6 +135,14 @@ if st.sidebar.button("🚀 Dispatch Robot Task", width="stretch"):
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚡ Hackathon Live Scenarios")
+
+if st.sidebar.button("📈 Trigger Fleet Surge (Autoscale Demo)", width="stretch"):
+    try:
+        s_resp = requests.post(f"{SERVER_URL}/api/v1/cloud/surge", json={"task_count": 8}, timeout=2.0)
+        if s_resp.status_code == 200:
+            st.sidebar.success("Injected 8 surge tasks! Autoscaler active.")
+    except Exception as e:
+        st.sidebar.error(f"Surge error: {e}")
 
 if st.sidebar.button("💥 Inundate 5 Batch + 1 Critical AGV", width="stretch"):
     for i in range(1, 6):
@@ -873,28 +883,41 @@ m_col5.metric("Failover Recoveries", failovers, delta="Auto-Recovered" if failov
 
 st.markdown("---")
 
-# Tabbed Layout for Comprehensive Demo
-tab1, tab2, tab3 = st.tabs(["⚡ Live Queue & Worker Pool", "📊 FIFO vs. RADS Benchmark", "👁️ Vision Feed & Audit Log"])
+# ================= TABBED SUITE: ROBOT AI PRIVATE CLOUD =================
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "⚡ Queue & Worker Fabric",
+    "☁️ Elastic Cloud Autoscaler",
+    "🏢 Multi-Tenant Fleets & SLA",
+    "🛡️ S3 Incident Black-Box",
+    "📊 Benchmarks & Vision Feed"
+])
 
 with tab1:
     col_w, col_q = st.columns([1, 1])
     
     with col_w:
-        st.subheader("👷 Multi-Worker AI Pool (Spec Section 20-22)")
-        for wid in ["worker-1", "worker-2"]:
-            w_data = r.hgetall(f"worker:{wid}") if redis_ok else {}
+        st.subheader("👷 Dynamic AI Compute Fabric")
+        worker_keys = sorted(r.keys("worker:*")) if redis_ok else ["worker:worker-1", "worker:worker-2"]
+        if not worker_keys:
+            worker_keys = ["worker:worker-1", "worker:worker-2"]
+            
+        for wk in worker_keys:
+            wid = wk.replace("worker:", "")
+            w_data = r.hgetall(wk) if redis_ok else {}
             status_val = w_data.get("status", "OFFLINE")
             healthy = (w_data.get("healthy") == "true")
             proc_jobs = w_data.get("processed_jobs", "0")
             cur_job = w_data.get("current_job_id")
+            w_type = w_data.get("type", "BASE_NODE")
             
             card_border = "#10b981" if healthy and status_val != "BUSY" else ("#f59e0b" if status_val == "BUSY" else "#ef4444")
             icon = "🟢" if healthy and status_val != "BUSY" else ("🟡" if status_val == "BUSY" else "🔴")
+            badge = " [ELASTIC]" if w_type == "ELASTIC_DYNAMIC" or wid not in ("worker-1", "worker-2") else " [BASE]"
             
             st.markdown(f"""
             <div style="background: #111827; border: 2px solid {card_border}; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <b style="font-size: 16px;">{wid.upper()} {icon}</b>
+                    <b style="font-size: 16px;">{wid.upper()}{badge} {icon}</b>
                     <span>Status: <b>{status_val}</b></span>
                 </div>
                 <div style="font-size: 13px; color: #9ca3af; margin-top: 6px;">
@@ -903,7 +926,7 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
             
-        st.caption("Automatic Failover: If any worker crashes, the Health Monitor requeues in-flight jobs for instant peer takeover.")
+        st.caption("Automatic Failover: If any worker crashes, in-flight jobs are atomically requeued and peer-recovered.")
 
     with col_q:
         st.subheader(f"⏳ RADS Priority Queue ({q_depth} waiting)")
@@ -918,20 +941,94 @@ with tab1:
                     "Pos": f"#{rank}",
                     "Criticality": badge,
                     "Robot": tdata.get("robot_id", "Unknown"),
+                    "Fleet": tdata.get("tenant_id", "FLEET-AGV-LOGISTICS"),
                     "RADS Score": f"{-score:.3f}",
                     "Deadline": f"{tdata.get('deadline_ms', '-')}ms",
                     "Task ID": tid[:8] + "..."
                 })
             st.dataframe(pd.DataFrame(q_rows), width="stretch", hide_index=True)
         else:
-            st.info("✅ RADS Queue is clear. Workers are waiting for robot tasks.")
+            st.info("✅ RADS Queue is clear. Workers are ready for robot perception tasks.")
 
 with tab2:
-    st.subheader("📈 FIFO Baseline vs. RADS Scheduler Benchmark (Spec Section 41)")
+    st.subheader("☁️ Autonomous Elastic Cloud Autoscaler")
     st.markdown("""
-    Under identical heavy contention (50 normal requests + 10 critical requests), standard **FIFO queues suffer severe deadline misses**, 
-    whereas **RADS prioritizes mission-critical robot tasks** to achieve **100% Critical Deadline Satisfaction**.
+    **Event-Driven Edge Elasticity (KEDA-style):** The Private Cloud continuously inspects queue pressure and latency gradients.
+    When queue depth crosses threshold (>= 3 tasks), auxiliary AI worker pods (`worker-3`, `worker-4`, `worker-5`) are provisioned in milliseconds.
+    When the queue is drained and idle for > 6 seconds, auxiliary workers scale back down to minimize edge compute & energy footprint.
     """)
+    
+    scale_info = r.hgetall("cloud:autoscaler:status") if redis_ok else {}
+    as_col1, as_col2, as_col3, as_col4 = st.columns(4)
+    as_col1.metric("Autoscaler Policy", "KEDA Queue Metric")
+    as_col2.metric("Active Cloud Workers", scale_info.get("current_workers", "2"), delta=f"Max: {scale_info.get('max_workers', 5)}")
+    as_col3.metric("Current Scaling State", scale_info.get("state", "STABLE"))
+    as_col4.metric("Scale-Up Threshold", ">= 3 tasks")
+    
+    st.markdown("#### 📜 Live Autoscaler Provisioning Log")
+    scale_events = r.lrange("cloud:autoscaler:events", 0, 10) if redis_ok else []
+    if scale_events:
+        for ev in scale_events:
+            color = "#10b981" if "SCALE_DOWN" in ev else ("#f59e0b" if "SCALE_UP" in ev else "#60a5fa")
+            st.markdown(f"<div style='font-family: monospace; font-size: 13px; color: {color}; padding: 3px 0;'>{ev}</div>", unsafe_allow_html=True)
+    else:
+        st.info("Autoscaler initialized. Click '📈 Trigger Fleet Surge' in the sidebar to observe live elastic scaling!")
+
+with tab3:
+    st.subheader("🏢 Multi-Tenant Fleet Governance & SLA Compliance")
+    st.markdown("Industrial Private Clouds partition compute across distinct robotic departments, enforcing per-fleet rate limits and latency SLAs.")
+    
+    tenants_summary = fleet_tenants.get_all_tenants_metrics(r) if redis_ok else {}
+    if tenants_summary:
+        t_cols = st.columns(len(tenants_summary))
+        for idx, (tid, tdata) in enumerate(tenants_summary.items()):
+            with t_cols[idx]:
+                st.markdown(f"""
+                <div style="background: #111827; border-left: 4px solid {tdata.get('color', '#3b82f6')}; border-radius: 8px; padding: 14px;">
+                    <b style="font-size: 15px; color: {tdata.get('color')};">{tdata.get('name')}</b><br>
+                    <small>Tier: <b>{tdata.get('tier')}</b></small>
+                    <hr style="margin: 8px 0; border-color: #374151;">
+                    <div>Target SLA: <b>&le; {tdata.get('sla_target_ms')} ms</b></div>
+                    <div>SLA Met: <b style="color: #10b981;">{tdata.get('sla_compliance_pct')}%</b></div>
+                    <div>Rate Limit: <b>{tdata.get('rate_limit_per_sec')} req/s</b></div>
+                    <div>Total Served: <b>{tdata.get('total_requests')} reqs</b></div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+    st.markdown("---")
+    st.caption("Zero-Trust Fleet Authentication: Ingress Gateway validates scoped tokens (`X-Fleet-Tenant`, `X-Robot-Token`) with per-second bucket enforcement.")
+
+with tab4:
+    st.subheader("🛡️ ISO 3691-4 Incident Black-Box & Compliance Archiver")
+    st.markdown("""
+    When safety-critical hazards occur (e.g. human in AGV path or worker node failover), sensor snapshots and flight telemetry
+    are automatically sealed and archived into **S3-Compatible Object Storage** (`s3://robonexus-incidents/`) for audit compliance.
+    """)
+    
+    incidents = incident_archiver.list_recent_incidents(10)
+    if incidents:
+        inc_rows = []
+        for inc in incidents:
+            inc_rows.append({
+                "Incident ID": inc.get("incident_id"),
+                "Timestamp (UTC)": inc.get("timestamp"),
+                "Robot": inc.get("robot_id"),
+                "Event Type": inc.get("event_type"),
+                "Severity": inc.get("criticality"),
+                "S3 URI": inc.get("s3_uri"),
+                "Compliance Standard": inc.get("compliance_standard")
+            })
+        st.dataframe(pd.DataFrame(inc_rows), width="stretch", hide_index=True)
+        
+        with st.expander("🔍 Inspect Latest Incident Black-Box Packet (JSON)"):
+            latest_inc = incident_archiver.get_incident_by_id(incidents[0]["incident_id"])
+            if latest_inc:
+                st.json({k: v for k, v in latest_inc.items() if k != "image_base64"})
+    else:
+        st.info("No safety hazard incidents logged yet. Triggering a critical collision hazard will automatically seal an incident record to S3.")
+
+with tab5:
+    st.subheader("📈 Performance Benchmarks & Live Vision Audit")
     
     b_col1, b_col2 = st.columns(2)
     with b_col1:
@@ -949,7 +1046,7 @@ with tab2:
             "P95 Latency (ms)": [780.0, 24.5]
         })
         st.bar_chart(lat_data.set_index("Scheduler"), color=["#3b82f6"])
-with tab3:
+    st.markdown("---")
     col_img, col_hist = st.columns([1, 1])
     with col_img:
         st.subheader("👁️ AI Vision Inference Feed")

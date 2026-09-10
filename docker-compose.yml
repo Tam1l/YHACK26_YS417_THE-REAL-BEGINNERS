@@ -1,31 +1,129 @@
+version: '3.8'
+
+# =========================================================================
+# RoboNexus — Enterprise Robot AI Private Cloud Compose Orchestration
+# =========================================================================
+
+networks:
+  robonexus-cloud-net:
+    driver: bridge
+
+volumes:
+  redis_data:
+  minio_data:
+  incidents_vault:
+
 services:
+  # -------------------------------------------------------------
+  # 1. State Fabric & Priority Queue: Redis
+  # -------------------------------------------------------------
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    container_name: robonexus-redis-fabric
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - robonexus-cloud-net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 5
+
+  # -------------------------------------------------------------
+  # 2. S3-Compatible Incident Black-Box Storage: MinIO
+  # -------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: robonexus-s3-vault
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - robonexus-cloud-net
+
+  # -------------------------------------------------------------
+  # 3. Dual-Protocol Ingress Gateway: FastAPI + Fleet RBAC
+  # -------------------------------------------------------------
   gateway:
     build: .
+    container_name: robonexus-gateway
     command: uvicorn server:app --host 0.0.0.0 --port 8000
-    environment: { REDIS_HOST: redis }
-    ports: ["8000:8000"]
-    depends_on: { redis: { condition: service_healthy } }
-  worker-1:
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - S3_ENDPOINT=http://minio:9000
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - robonexus-cloud-net
+
+  # -------------------------------------------------------------
+  # 4. Elastic AI Inference Worker Pool & Autoscaler
+  # -------------------------------------------------------------
+  worker-pool:
     build: .
+    container_name: robonexus-worker-pool
     command: python worker.py
-    environment: { REDIS_HOST: redis }
-    depends_on: { redis: { condition: service_healthy } }
-  worker-2:
-    build: .
-    command: python worker.py
-    environment: { REDIS_HOST: redis }
-    depends_on: { redis: { condition: service_healthy } }
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SERVER_URL=http://gateway:8000
+      - SCALE_UP_THRESHOLD=3
+      - SCALE_DOWN_COOLDOWN=6.0
+    depends_on:
+      - redis
+      - gateway
+    volumes:
+      - incidents_vault:/app/storage/incidents
+    networks:
+      - robonexus-cloud-net
+
+  # -------------------------------------------------------------
+  # 5. Mission Control Ground Station & Telemetry Dashboard
+  # -------------------------------------------------------------
   dashboard:
     build: .
-    command: streamlit run dashboard.py --server.address 0.0.0.0 --server.port 8501
-    environment: { REDIS_HOST: redis, SERVER_URL: http://gateway:8000 }
-    ports: ["8501:8501"]
-    depends_on: { gateway: { condition: service_started } }
+    container_name: robonexus-mission-control
+    command: streamlit run dashboard.py --server.port 8501 --server.headless true --server.enableCORS false
+    ports:
+      - "8501:8501"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SERVER_URL=http://gateway:8000
+    depends_on:
+      - redis
+      - gateway
+    volumes:
+      - incidents_vault:/app/storage/incidents
+    networks:
+      - robonexus-cloud-net
+
+  # -------------------------------------------------------------
+  # 6. Multi-Robot Fleet Simulator (Autonomous Background Agent)
+  # -------------------------------------------------------------
+  fleet-simulator:
+    build: .
+    container_name: robonexus-fleet-simulator
+    command: python robot_simulator.py
+    environment:
+      - SERVER_URL=http://gateway:8000
+      - REDIS_HOST=redis
+    depends_on:
+      - gateway
+      - worker-pool
+    networks:
+      - robonexus-cloud-net

@@ -9,6 +9,10 @@ import redis
 from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+import incident_archiver
+import fleet_tenants
+from autoscaler import ElasticAutoscaler
+
 REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
@@ -77,14 +81,22 @@ class AIWorker(threading.Thread):
     def __init__(self, worker_id: str):
         super().__init__(name=worker_id, daemon=True)
         self.worker_id = worker_id
+        self.running = True
         self.is_alive = True
         self.current_task_id = None
         self.processed_count = 0
         
+    def stop(self):
+        self.running = False
+        self.is_alive = False
+        self.update_heartbeat(status="OFFLINE")
+        
     def update_heartbeat(self, status: str = "IDLE"):
+        w_type = "ELASTIC_DYNAMIC" if self.worker_id not in ("worker-1", "worker-2") else "BASE_NODE"
         redis_client.hset(f"worker:{self.worker_id}", mapping={
             "worker_id": self.worker_id,
             "status": status,
+            "type": w_type,
             "healthy": "true" if self.is_alive else "false",
             "current_job_id": self.current_task_id or "",
             "last_heartbeat": str(time.time()),
@@ -93,7 +105,7 @@ class AIWorker(threading.Thread):
 
     def run(self):
         print(f"[+] {self.worker_id} started and ready.")
-        while True:
+        while self.running:
             # Check debug kill injection
             if redis_client.get(f"debug:fail:{self.worker_id}") == "1":
                 self.is_alive = False
@@ -137,6 +149,8 @@ class AIWorker(threading.Thread):
                 img_b64 = task_data.get("image_base64", "")
                 created_ts = float(task_data.get("created_ts", time.time()))
                 deadline_ms = float(task_data.get("deadline_ms", 500.0))
+                robot_id = task_data.get("robot_id", "ROBOT-UNKNOWN")
+                tenant_id = task_data.get("tenant_id", "FLEET-AGV-LOGISTICS")
                 
                 try:
                     img_bytes = base64.b64decode(img_b64)
@@ -169,11 +183,30 @@ class AIWorker(threading.Thread):
                 redis_client.incr("stats:processed")
                 redis_client.incrbyfloat("stats:latency_sum", inference_ms)
                 
+                # Multi-tenant fleet telemetry recording
+                fleet_tenants.record_tenant_telemetry(tenant_id, total_latency_ms, deadline_met, redis_client)
+                
                 crit = task_data.get("criticality", "NORMAL")
                 if crit in ("CRITICAL", "1", 1):
                     redis_client.incr("stats:critical_total")
                     if deadline_met:
                         redis_client.incr("stats:critical_deadline_met")
+                        
+                    # Auto Black-Box Archival for Critical events
+                    incident_archiver.archive_incident(
+                        robot_id=robot_id,
+                        event_type="COLLISION_AVOIDANCE_HAZARD",
+                        criticality=crit,
+                        details={
+                            "task_id": task_id,
+                            "classes": classes,
+                            "confidences": confidences,
+                            "latency_ms": round(total_latency_ms, 2),
+                            "deadline_met": deadline_met,
+                            "worker": self.worker_id
+                        },
+                        image_base64=img_b64
+                    )
                 
                 print(f"[OK] {self.worker_id} -> Task [{task_id[:8]}...] | Latency: {inference_ms:.1f}ms | Deadline Met: {deadline_met}")
                 
@@ -199,7 +232,7 @@ class HealthSupervisor(threading.Thread):
         while True:
             time.sleep(0.5)
             now = time.time()
-            for w in self.workers:
+            for w in list(self.workers):
                 w_key = f"worker:{w.worker_id}"
                 data = redis_client.hgetall(w_key)
                 if not data:
@@ -210,7 +243,7 @@ class HealthSupervisor(threading.Thread):
                 in_flight_job = data.get("current_job_id")
                 
                 # Check for missed heartbeats (>3.0s timeout) or forced fail
-                if (now - last_hb > 3.0 or not w.is_alive) and status != "DEAD":
+                if (now - last_hb > 3.0 or not w.is_alive) and status != "DEAD" and status != "OFFLINE":
                     redis_client.hset(w_key, "status", "DEAD")
                     redis_client.hset(w_key, "healthy", "false")
                     print(f"[ALERT] Worker [{w.worker_id}] is DEAD! Initiating crash recovery...")
@@ -231,29 +264,45 @@ class HealthSupervisor(threading.Thread):
                                 redis_client.zadd(QUEUE_KEY, {in_flight_job: queue_score})
                                 redis_client.incr("stats:failovers")
                                 print(f"[RECOVERY SUCCESS] Task [{in_flight_job[:8]}...] REQUEUED for healthy worker takeover! (Retry: {retries})")
+                                
+                                # Archive failover incident to S3 black-box
+                                incident_archiver.archive_incident(
+                                    robot_id="SUPERVISOR-RECOVERY",
+                                    event_type="WORKER_FAILOVER_REQUEUE",
+                                    criticality="HIGH",
+                                    details={
+                                        "dead_worker": w.worker_id,
+                                        "requeued_task_id": in_flight_job,
+                                        "retry_count": retries
+                                    }
+                                )
                             else:
                                 redis_client.hset(task_key, "state", "failed")
                                 print(f"[!] Task [{in_flight_job[:8]}...] exceeded max retries.")
 
 def main():
     print("=" * 65)
-    print("ROBONEXUS — MULTI-WORKER AI INFERENCE POOL & RADS SCHEDULER")
-    print("Workers: Worker-1, Worker-2 | Heartbeat & Failover Engine: Active")
+    print("ROBONEXUS — ENTERPRISE ROBOT AI PRIVATE CLOUD WORKER POOL")
+    print("Base Workers: Worker-1, Worker-2 | Elastic Autoscaler: ACTIVE")
     print("=" * 65)
     
     worker1 = AIWorker("worker-1")
     worker2 = AIWorker("worker-2")
     supervisor = HealthSupervisor([worker1, worker2])
     
+    # Elastic Autoscaler integrated with supervisor and worker factory
+    autoscaler = ElasticAutoscaler(worker_factory=AIWorker, supervisor=supervisor)
+    
     worker1.start()
     worker2.start()
     supervisor.start()
+    autoscaler.start()
     
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\nStopping worker pool.")
+        print("\nStopping private cloud worker pool.")
 
 if __name__ == "__main__":
     main()

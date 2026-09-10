@@ -22,6 +22,7 @@ ROBOTS = [
     {
         "name": "AGV-Collision-Avoidance",
         "robot_id": "AGV-01",
+        "fleet_tenant": "FLEET-AGV-LOGISTICS",
         "token": "agv-token",
         "criticality": "CRITICAL",
         "deadline_ms": 100.0,
@@ -31,6 +32,7 @@ ROBOTS = [
     {
         "name": "Drone-Navigation",
         "robot_id": "DRONE-07",
+        "fleet_tenant": "FLEET-DRONE-PATROL",
         "token": "drone-token",
         "criticality": "HIGH",
         "deadline_ms": 250.0,
@@ -40,6 +42,7 @@ ROBOTS = [
     {
         "name": "Floor-Sweeper-Inventory",
         "robot_id": "SWEEPER-12",
+        "fleet_tenant": "FLEET-SWEEPER-INVENTORY",
         "token": "sweeper-token",
         "criticality": "NORMAL",
         "deadline_ms": 800.0,
@@ -69,13 +72,17 @@ def post_with_exponential_backoff(robot_cfg: Dict, max_retries: int = 5) -> str:
     delay = 1.0
     payload = {
         "robot_id": robot_cfg["robot_id"],
+        "fleet_tenant": robot_cfg.get("fleet_tenant", "FLEET-AGV-LOGISTICS"),
         "task_type": "object_detection",
         "criticality": robot_cfg["criticality"],
         "deadline_ms": robot_cfg["deadline_ms"],
         "image_base64": generate_mock_sensor_frame(robot_cfg["name"], robot_cfg["color"]),
     }
+    headers = {
+        "X-Robot-Token": robot_cfg.get("token", "robot-token-secret"),
+        "X-Fleet-Tenant": robot_cfg.get("fleet_tenant", "FLEET-AGV-LOGISTICS")
+    }
     
-    headers = {"X-Robot-Token": robot_cfg.get("token", "robot-token-secret")}
     for attempt in range(1, max_retries + 1):
         try:
             resp = requests.post(INFERENCE_ENDPOINT, json=payload, headers=headers, timeout=4.0)
@@ -100,7 +107,10 @@ def poll_for_completion(req_id: str, robot_cfg: Dict, timeout: float = 15.0):
         return
     start = time.time()
     url = f"{SERVER_URL}/api/v1/inference/{req_id}/result"
-    headers = {"X-Robot-Token": robot_cfg.get("token", "robot-token-secret")}
+    headers = {
+        "X-Robot-Token": robot_cfg.get("token", "robot-token-secret"),
+        "X-Fleet-Tenant": robot_cfg.get("fleet_tenant", "FLEET-AGV-LOGISTICS")
+    }
     while time.time() - start < timeout:
         try:
             resp = requests.get(url, headers=headers, timeout=3.0)

@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package robonexus.robotics.v1;
+
+// Service definition for real-time edge AI inference across robot fleets
+service RoboticsInferenceService {
+    // Single-frame unary inference call with zero-copy raw byte payload
+    rpc InferFrame (InferenceRequest) returns (InferenceResponse);
+
+    // Bidirectional low-latency perception stream for continuous robot navigation
+    rpc StreamPerception (stream InferenceRequest) returns (stream InferenceResponse);
+
+    // Heartbeat & telemetry reporting from robots to cloud control plane
+    rpc ReportTelemetry (TelemetryReport) returns (TelemetryAck);
+}
+
+enum CriticalityLevel {
+    CRITICALITY_UNSPECIFIED = 0;
+    CRITICAL = 1;     // e.g. AGV Collision Avoidance (<100ms deadline)
+    HIGH = 2;         // e.g. Drone Obstacle Detection (<250ms deadline)
+    NORMAL = 3;       // e.g. Warehouse Inventory Scan (<800ms deadline)
+    LOW = 4;          // e.g. Facility Routine Mapping (<2000ms deadline)
+}
+
+message FleetTenant {
+    string tenant_id = 1;         // e.g. "TENANT-LOGISTICS-AGV"
+    string fleet_name = 2;        // e.g. "Warehouse Alpha AGV Fleet"
+    string tier = 3;              // "MISSION_CRITICAL", "OPERATIONAL", "BEST_EFFORT"
+    int32 max_rate_per_sec = 4;
+}
+
+message InferenceRequest {
+    string request_id = 1;
+    string robot_id = 2;
+    FleetTenant tenant = 3;
+    string task_type = 4;         // "object_detection", "slam_assist", "hazard_id"
+    CriticalityLevel criticality = 5;
+    float deadline_ms = 6;
+    bytes image_raw_bytes = 7;    // Raw binary JPEG/PNG/RGB8 buffer (no base64 overhead)
+    int32 image_width = 8;
+    int32 image_height = 9;
+    string pixel_format = 10;     // "JPEG", "PNG", "RGB8", "BGR8"
+    int64 timestamp_ns = 11;      // Robot local hardware timestamp
+}
+
+message BoundingBox {
+    float xmin = 1;
+    float ymin = 2;
+    float xmax = 3;
+    float ymax = 4;
+    string class_label = 5;       // "obstacle", "human", "forklift", "pallet"
+    float confidence = 6;
+    bool is_collision_hazard = 7;
+}
+
+message InferenceResponse {
+    string request_id = 1;
+    string robot_id = 2;
+    string status = 3;            // "COMPLETED", "DEADLINE_EXCEEDED", "FAILOVER_RECOVERED"
+    string assigned_worker = 4;
+    float inference_time_ms = 5;
+    float total_cloud_latency_ms = 6;
+    bool deadline_met = 7;
+    repeated BoundingBox detections = 8;
+    int32 detection_count = 9;
+    bool collision_hazard_detected = 10;
+    string incident_archive_id = 11; // S3 incident archive URI if hazard flagged
+    int64 completed_timestamp_ns = 12;
+}
+
+message TelemetryReport {
+    string robot_id = 1;
+    float battery_pct = 2;
+    float velocity_mps = 3;
+    string status_mode = 4;       // "NAVIGATING", "BLOCKED", "CHARGING", "IDLE"
+    int64 uptime_seconds = 5;
+}
+
+message TelemetryAck {
+    bool accepted = 1;
+    int64 server_time_ns = 2;
+}

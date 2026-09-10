@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: robonexus-cloud
+---
+# -----------------------------------------------------------------------------
+# 1. State Fabric & Priority Queue: Redis
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-fabric
+  namespace: robonexus-cloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-fabric
+  template:
+    metadata:
+      labels:
+        app: redis-fabric
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        command: ["redis-server", "--save", "", "--appendonly", "no"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: robonexus-cloud
+spec:
+  selector:
+    app: redis-fabric
+  ports:
+  - port: 6379
+    targetPort: 6379
+---
+# -----------------------------------------------------------------------------
+# 2. Dual-Protocol Ingress API Gateway
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: robonexus-gateway
+  namespace: robonexus-cloud
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: robonexus-gateway
+  template:
+    metadata:
+      labels:
+        app: robonexus-gateway
+    spec:
+      containers:
+      - name: gateway
+        image: robonexus/private-cloud:latest
+        command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+        ports:
+        - containerPort: 8000
+        env:
+        - name: REDIS_HOST
+          value: "redis.robonexus-cloud.svc.cluster.local"
+        - name: REDIS_PORT
+          value: "6379"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: robonexus-gateway-svc
+  namespace: robonexus-cloud
+spec:
+  type: LoadBalancer
+  selector:
+    app: robonexus-gateway
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+# -----------------------------------------------------------------------------
+# 3. Elastic AI Inference Worker Pool
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: robonexus-ai-workers
+  namespace: robonexus-cloud
+spec:
+  replicas: 2 # Base minimal workers
+  selector:
+    matchLabels:
+      app: robonexus-worker
+  template:
+    metadata:
+      labels:
+        app: robonexus-worker
+    spec:
+      containers:
+      - name: worker
+        image: robonexus/private-cloud:latest
+        command: ["python", "worker.py"]
+        env:
+        - name: REDIS_HOST
+          value: "redis.robonexus-cloud.svc.cluster.local"
+        - name: REDIS_PORT
+          value: "6379"
+        resources:
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+---
+# -----------------------------------------------------------------------------
+# 4. KEDA Event-Driven Elastic Autoscaler (Queue-Depth Driven)
+# -----------------------------------------------------------------------------
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: robonexus-worker-autoscaler
+  namespace: robonexus-cloud
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: robonexus-ai-workers
+  pollingInterval: 1 # Inspect queue every 1s
+  cooldownPeriod: 6   # Scale down after 6s idle
+  minReplicaCount: 2  # Base pool
+  maxReplicaCount: 5  # Max surge capacity
+  triggers:
+  - type: redis
+    metadata:
+      address: redis.robonexus-cloud.svc.cluster.local:6379
+      listName: queue:tasks
+      listLength: "3" # Threshold: scale up when queue >= 3
