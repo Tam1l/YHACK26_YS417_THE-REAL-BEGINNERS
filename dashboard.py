@@ -62,6 +62,14 @@ st.markdown("""
         backdrop-filter: blur(8px);
     }
     
+    /* Shift main screen div to the rightmost leaving space on the left and padding on the right */
+    .main .block-container {
+        max-width: min(1440px, calc(100% - 40px)) !important;
+        margin-left: auto !important;
+        margin-right: 28px !important;
+        padding-right: 28px !important;
+    }
+    
     /* Sidebar Styling - Clean Slate-100 with High Readability */
     section[data-testid="stSidebar"] {
         background-color: #f1f5f9 !important;

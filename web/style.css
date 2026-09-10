@@ -271,12 +271,30 @@ body {
 
 /* ================= MAIN CONTAINER ================= */
 .app-container {
-    max-width: 1440px;
-    margin: 0 auto;
+    max-width: min(1440px, calc(100% - 320px));
+    margin-left: auto;
+    margin-right: 28px;
     padding: 20px 24px 60px 24px;
     display: flex;
     flex-direction: column;
     gap: 20px;
+}
+
+@media (max-width: 1280px) {
+    .app-container {
+        max-width: calc(100% - 280px);
+        margin-left: auto;
+        margin-right: 24px;
+    }
+}
+
+@media (max-width: 900px) {
+    .app-container {
+        max-width: 100%;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 16px 16px 60px 16px;
+    }
 }
 
 /* ================= 2D SIMULATION ARENA ================= */
