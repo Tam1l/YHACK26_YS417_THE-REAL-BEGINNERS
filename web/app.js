@@ -2,6 +2,21 @@
    ROBONEXUS PRIVATE AI CLOUD — CLIENT LOGIC & SIMULATION ENGINE
    ========================================================================== */
 
+// --- Gateway routing ---
+// The same UI can be served by FastAPI on :8000/dashboard or by the
+// dedicated dashboard service on :8501.  In the latter case all API calls
+// go to the gateway explicitly.
+const gatewayOrigin = window.location.port === '8501'
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : '';
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+    if (typeof input === 'string' && input.startsWith('/')) {
+        return nativeFetch(`${gatewayOrigin}${input}`, init);
+    }
+    return nativeFetch(input, init);
+};
+
 // --- Global State ---
 let isRunning = true;
 let humanHazard = false;

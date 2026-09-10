@@ -993,6 +993,28 @@ body {
     align-items: center;
 }
 
+/* Keep the command surface readable from laptops through projector screens. */
+@media (max-width: 1180px) {
+    .header-bar { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+    .header-status-pills { order: 3; width: 100%; flex-wrap: wrap; }
+    .command-toolbar { justify-content: flex-start; }
+    .arena-canvas-container { height: 440px; }
+}
+
+@media (max-width: 720px) {
+    .header-bar, .command-toolbar { padding-left: 14px; padding-right: 14px; }
+    .header-actions { width: 100%; justify-content: space-between; }
+    .brand-badge, .brand-sub { display: none; }
+    .app-container { padding: 14px 12px 40px; gap: 14px; }
+    .arena-canvas-container { height: 340px; }
+    .controls-deck, .deck-btn-group, .feed-header, .feed-footer { align-items: stretch; }
+    .controls-deck, .deck-btn-group, .feed-header, .feed-footer { flex-direction: column; }
+    .btn { justify-content: center; width: 100%; }
+    .metrics-grid { grid-template-columns: 1fr; }
+    .tabs-nav { overflow-x: auto; white-space: nowrap; }
+    .feed-overlay-hud { gap: 4px; flex-wrap: wrap; }
+}
+
 /* ================= AUTO-NAVIGATE TAB FOCUS & CENTER ================= */
 html {
     scroll-behavior: smooth;
