@@ -304,7 +304,7 @@ ARENA_HTML = """
 
         let isRunning = true;
         let humanHazard = false;
-        let humanPos = { x: 580, y: 260 };
+        let humanPos = { x: 560, y: 265 };
         let worker1Alive = true;
         let worker2Alive = true;
         let latestLatency = 17.4;
@@ -318,7 +318,7 @@ ARENA_HTML = """
         const agv = {
             id: 'AGV-01',
             x: 80,
-            y: 260,
+            y: 265,
             targetX: 840,
             speed: 2.2,
             crit: 'CRITICAL',
@@ -329,8 +329,8 @@ ARENA_HTML = """
 
         const drone = {
             id: 'DRONE-07',
-            x: 240,
-            y: 110,
+            x: 260,
+            y: 195,
             angle: 0,
             color: '#38bdf8'
         };
@@ -338,7 +338,7 @@ ARENA_HTML = """
         const sweeper = {
             id: 'SWEEPER-12',
             x: 320,
-            y: 410,
+            y: 328,
             dir: 1,
             color: '#34d399'
         };
@@ -473,7 +473,7 @@ ARENA_HTML = """
             const w = canvas.width;
             const h = canvas.height;
 
-            // Grid
+            // Background Grid
             ctx.strokeStyle = '#1e293b';
             ctx.lineWidth = 1;
             for (let x = 0; x < w; x += 40) {
@@ -483,151 +483,224 @@ ARENA_HTML = """
                 ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
             }
 
-            // Storage Racks
-            const racks = [
-                { x: 120, y: 50, w: 180, h: 45, label: "RACK AISLE A1" },
-                { x: 360, y: 50, w: 180, h: 45, label: "RACK AISLE A2" },
-                { x: 600, y: 50, w: 180, h: 45, label: "RACK AISLE A3" },
-                { x: 120, y: 410, w: 180, h: 45, label: "RACK AISLE B1" },
-                { x: 360, y: 410, w: 180, h: 45, label: "RACK AISLE B2" },
-                { x: 600, y: 410, w: 180, h: 45, label: "RACK AISLE B3" }
-            ];
+            // Central AGV Highway Transit Lane
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+            ctx.fillRect(0, 225, w, 80);
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, 225); ctx.lineTo(w, 225);
+            ctx.moveTo(0, 305); ctx.lineTo(w, 305);
+            ctx.stroke();
 
-            racks.forEach(r => {
-                ctx.fillStyle = '#0f172a';
-                ctx.fillRect(r.x, r.y, r.w, r.h);
-                ctx.strokeStyle = '#334155';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(r.x, r.y, r.w, r.h);
-
-                ctx.fillStyle = '#64748b';
-                ctx.font = '10px monospace';
-                ctx.fillText(r.label, r.x + 12, r.y + 26);
-
-                // Shelf boxes
-                for (let b = 0; b < 4; b++) {
-                    ctx.fillStyle = (b % 2 === 0) ? '#d97706' : '#0284c7';
-                    ctx.fillRect(r.x + 105 + (b * 16), r.y + 12, 12, 20);
-                }
-            });
-
-            // Highway Transit Lane
-            ctx.fillStyle = 'rgba(30, 41, 59, 0.4)';
-            ctx.fillRect(0, 220, w, 80);
+            // Center yellow hazard guidestrip
             ctx.strokeStyle = '#eab308';
             ctx.lineWidth = 2;
-            ctx.setLineDash([12, 12]);
+            ctx.setLineDash([14, 12]);
             ctx.beginPath();
-            ctx.moveTo(0, 260); ctx.lineTo(w, 260);
+            ctx.moveTo(0, 265); ctx.lineTo(w, 265);
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Charging Pad
-            ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
-            ctx.fillRect(40, 70, 50, 50);
-            ctx.strokeStyle = '#10b981';
-            ctx.strokeRect(40, 70, 50, 50);
+            // Highway Corridor Label
+            ctx.fillStyle = '#64748b';
+            ctx.font = 'bold 10px monospace';
+            ctx.fillText("AGV HIGH-SPEED TRANSIT CORRIDOR [LANE-01]", 260, 240);
+
+            // Fleet Autonomous Charging Dock (Top Center: between Queue HUD and Cloud Hub)
+            const dockX = Math.max(260, Math.floor((w - 180) / 2));
+            const dockY = 14;
+            const dockW = 180;
+            const dockH = 92;
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.08)';
+            ctx.fillRect(dockX, dockY, dockW, dockH);
+            ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(dockX, dockY, dockW, dockH);
+
             ctx.fillStyle = '#10b981';
-            ctx.font = 'bold 10px sans-serif';
-            ctx.fillText("CHARGER", 42, 100);
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText("⚡ AUTONOMOUS DOCK", dockX + 16, dockY + 22);
+
+            ctx.fillStyle = '#6ee7b7';
+            ctx.font = '9px monospace';
+            ctx.fillText("BAY 1: WIRELESS INDUCTIVE", dockX + 16, dockY + 44);
+            ctx.fillText("TELEMETRY: 5.8 GHz RAW", dockX + 16, dockY + 62);
+            ctx.fillText("STATUS: ACTIVE READY", dockX + 16, dockY + 80);
+
+            // Storage Racks - Perfectly spaced with zero overlap!
+            const rackW = 175;
+            const rackH = 46;
+
+            const topRacks = [
+                { x: 24, y: 122, label: "RACK AISLE A1" },
+                { x: 224, y: 122, label: "RACK AISLE A2" },
+                { x: 424, y: 122, label: "RACK AISLE A3" },
+                { x: 624, y: 122, label: "RACK AISLE A4" }
+            ];
+
+            const bottomRacks = [
+                { x: 24, y: 356, label: "RACK AISLE B1" },
+                { x: 224, y: 356, label: "RACK AISLE B2" },
+                { x: 424, y: 356, label: "RACK AISLE B3" }
+            ];
+
+            const allRacks = [...topRacks, ...bottomRacks].filter(r => r.x + rackW <= w - 10);
+
+            allRacks.forEach(r => {
+                // Shelf Body
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(r.x, r.y, rackW, rackH);
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(r.x, r.y, rackW, rackH);
+
+                // Rack Label
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'bold 10px monospace';
+                ctx.fillText(r.label, r.x + 10, r.y + 28);
+
+                // Inventory Bins
+                for (let b = 0; b < 4; b++) {
+                    const bx = r.x + 102 + (b * 16);
+                    ctx.fillStyle = (b % 2 === 0) ? '#f59e0b' : '#0284c7';
+                    ctx.fillRect(bx, r.y + 12, 12, 22);
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(bx, r.y + 12, 12, 22);
+                }
+            });
+
+            // Drone flight path dashed guide (between Top Racks and Highway)
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 8]);
+            ctx.beginPath();
+            ctx.moveTo(20, 195); ctx.lineTo(w - 20, 195);
+            ctx.stroke();
+            ctx.setLineDash([]);
         }
 
         function drawCloudHub() {
             const w = canvas.width;
-            const hubX = w - 180;
-            const hubY = 16;
-            const hubW = 165;
-            const hubH = 95;
+            const hubW = 172;
+            const hubH = 92;
+            const hubX = w - hubW - 16;
+            const hubY = 14;
 
-            // Box
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
             ctx.fillRect(hubX, hubY, hubW, hubH);
             ctx.strokeStyle = '#38bdf8';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.8;
             ctx.strokeRect(hubX, hubY, hubW, hubH);
 
-            ctx.fillStyle = '#38bdf8';
-            ctx.font = 'bold 12px sans-serif';
-            ctx.fillText("☁️ PRIVATE AI CLOUD", hubX + 12, hubY + 20);
+            ctx.fillStyle = '#0284c7';
+            ctx.fillRect(hubX, hubY, hubW, 22);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText("☁️ PRIVATE AI CLOUD", hubX + 10, hubY + 15);
 
             // Workers
             ctx.fillStyle = worker1Alive ? '#10b981' : '#ef4444';
-            ctx.beginPath(); ctx.arc(hubX + 22, hubY + 45, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(hubX + 18, hubY + 45, 5, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = '#e2e8f0';
             ctx.font = '11px monospace';
-            ctx.fillText(`Worker-1: ${worker1Alive ? 'ONLINE' : 'DEAD'}`, hubX + 36, hubY + 49);
+            ctx.fillText(`Worker-1: ${worker1Alive ? 'HEALTHY' : 'DEAD'}`, hubX + 30, hubY + 49);
 
             ctx.fillStyle = worker2Alive ? '#10b981' : '#ef4444';
-            ctx.beginPath(); ctx.arc(hubX + 22, hubY + 70, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(hubX + 18, hubY + 70, 5, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = '#e2e8f0';
-            ctx.fillText(`Worker-2: ONLINE`, hubX + 36, hubY + 74);
+            ctx.fillText(`Worker-2: HEALTHY`, hubX + 30, hubY + 74);
         }
 
         function drawQueueHUD() {
-            const qX = 14;
+            const qX = 16;
             const qY = 14;
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-            ctx.fillRect(qX, qY, 210, 85);
+            const qW = 230;
+            const qH = 92;
+
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+            ctx.fillRect(qX, qY, qW, qH);
             ctx.strokeStyle = '#6366f1';
-            ctx.lineWidth = 1.5;
-            ctx.strokeRect(qX, qY, 210, 85);
+            ctx.lineWidth = 1.8;
+            ctx.strokeRect(qX, qY, qW, qH);
 
-            ctx.fillStyle = '#a5b4fc';
+            ctx.fillStyle = '#4f46e5';
+            ctx.fillRect(qX, qY, qW, 22);
+
+            ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 11px sans-serif';
-            ctx.fillText("⚡ RADS PRIORITY QUEUE", qX + 10, qY + 18);
+            ctx.fillText("⚡ RADS PRIORITY QUEUE", qX + 10, qY + 15);
 
-            queueList.slice(0, 3).forEach((item, idx) => {
-                const yPos = qY + 36 + (idx * 16);
+            const items = queueList.slice(0, 3);
+            items.forEach((item, idx) => {
+                const rowY = qY + 38 + (idx * 19);
+
+                // Priority Badge
                 ctx.fillStyle = item.color;
-                ctx.fillRect(qX + 10, yPos - 9, 8, 8);
-                ctx.fillStyle = '#f1f5f9';
+                ctx.fillRect(qX + 8, rowY - 10, 24, 13);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 9px monospace';
+                ctx.fillText(`P${item.p}`, qX + 12, rowY);
+
+                // Robot / Task Name
+                ctx.fillStyle = '#f8fafc';
                 ctx.font = '10px monospace';
-                ctx.fillText(`#${idx + 1} ${item.id} (P${item.p})`, qX + 24, yPos);
+                const nameText = item.id.length > 17 ? item.id.substring(0, 15) + '..' : item.id;
+                ctx.fillText(nameText, qX + 38, rowY);
+
+                // Position Badge
+                ctx.fillStyle = (idx === 0) ? '#ef4444' : '#64748b';
+                ctx.font = 'bold 9px monospace';
+                ctx.fillText(`#${idx + 1}`, qX + qW - 20, rowY);
             });
         }
 
         function drawCameraHUD() {
             const w = canvas.width;
-            const hudW = 195;
+            const hudW = 205;
             const hudH = 135;
-            const hudX = w - hudW - 14;
+            const hudX = w - hudW - 16;
             const hudY = canvas.height - hudH - 14;
 
-            ctx.fillStyle = 'rgba(10, 15, 26, 0.92)';
+            ctx.fillStyle = 'rgba(10, 15, 26, 0.95)';
             ctx.fillRect(hudX, hudY, hudW, hudH);
             ctx.strokeStyle = '#06b6d4';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.8;
             ctx.strokeRect(hudX, hudY, hudW, hudH);
 
-            ctx.fillStyle = '#06b6d4';
-            ctx.font = 'bold 11px sans-serif';
-            ctx.fillText("👁️ AGV VISION CAM [YOLOv8]", hudX + 10, hudY + 18);
+            ctx.fillStyle = '#0891b2';
+            ctx.fillRect(hudX, hudY, hudW, 20);
 
-            // Bounding box if human present
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillText("👁️ AGV REAL-TIME YOLOv8 CAM", hudX + 8, hudY + 14);
+
             if (humanHazard) {
                 ctx.strokeStyle = '#ef4444';
                 ctx.lineWidth = 2;
-                ctx.strokeRect(hudX + 50, hudY + 35, 95, 60);
+                ctx.strokeRect(hudX + 50, hudY + 32, 105, 60);
                 ctx.fillStyle = '#ef4444';
-                ctx.fillRect(hudX + 50, hudY + 23, 95, 14);
+                ctx.fillRect(hudX + 50, hudY + 22, 105, 13);
                 ctx.fillStyle = 'white';
                 ctx.font = 'bold 9px sans-serif';
-                ctx.fillText("HUMAN DETECT 98.4%", hudX + 54, hudY + 34);
+                ctx.fillText("HUMAN HAZARD 99.1%", hudX + 53, hudY + 32);
 
                 ctx.fillStyle = '#ef4444';
-                ctx.font = 'bold 11px monospace';
-                ctx.fillText("STATUS: EMERGENCY STOP", hudX + 10, hudY + 118);
+                ctx.font = 'bold 10px monospace';
+                ctx.fillText("STATUS: PREEMPTION BRAKE", hudX + 8, hudY + 118);
             } else {
                 ctx.strokeStyle = '#10b981';
                 ctx.lineWidth = 1.5;
-                ctx.strokeRect(hudX + 30, hudY + 45, 135, 45);
+                ctx.strokeRect(hudX + 35, hudY + 38, 135, 48);
                 ctx.fillStyle = '#10b981';
                 ctx.font = '9px monospace';
-                ctx.fillText("CORRIDOR CLEAR (P=0.97)", hudX + 35, hudY + 40);
+                ctx.fillText("CORRIDOR CLEAR [P=0.98]", hudX + 40, hudY + 34);
 
                 ctx.fillStyle = '#94a3b8';
                 ctx.font = '10px monospace';
-                ctx.fillText(`LATENCY: ${latestLatency.toFixed(1)}ms [MET ✅]`, hudX + 10, hudY + 118);
+                ctx.fillText(`LATENCY: ${latestLatency.toFixed(1)}ms [DEADLINE MET]`, hudX + 8, hudY + 118);
             }
         }
 
@@ -646,15 +719,15 @@ ARENA_HTML = """
                     if (agv.x > canvas.width - 60) agv.x = 40;
                 }
 
-                // Drone hovering
-                drone.angle += 0.04;
-                drone.x = 260 + Math.sin(drone.angle) * 80;
-                drone.y = 110 + Math.cos(drone.angle) * 20;
+                // Drone hovering along inspection corridor
+                drone.angle += 0.03;
+                drone.x = 280 + Math.sin(drone.angle) * 110;
+                drone.y = 195 + Math.cos(drone.angle) * 6;
 
-                // Sweeper back and forth
+                // Sweeper back and forth along bottom corridor
                 sweeper.x += 1.2 * sweeper.dir;
-                if (sweeper.x > 620) sweeper.dir = -1;
-                if (sweeper.x < 140) sweeper.dir = 1;
+                if (sweeper.x > canvas.width - 240) sweeper.dir = -1;
+                if (sweeper.x < 40) sweeper.dir = 1;
 
                 // Telemetry packets
                 packets.forEach(p => { p.progress += 0.04; });
@@ -705,11 +778,11 @@ ARENA_HTML = """
             ctx.strokeStyle = '#38bdf8';
             ctx.strokeRect(drone.x - 12, drone.y - 12, 24, 24);
             // Drone beam
-            ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.15)';
             ctx.beginPath();
-            ctx.moveTo(drone.x, drone.y);
-            ctx.lineTo(drone.x - 30, drone.y + 70);
-            ctx.lineTo(drone.x + 30, drone.y + 70);
+            ctx.moveTo(drone.x, drone.y + 12);
+            ctx.lineTo(drone.x - 22, drone.y + 36);
+            ctx.lineTo(drone.x + 22, drone.y + 36);
             ctx.closePath();
             ctx.fill();
 
