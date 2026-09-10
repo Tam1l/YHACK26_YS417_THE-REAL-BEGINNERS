@@ -259,29 +259,36 @@ function drawRack(x, y, w, h, accentColor, label, tierLevel, light) {
     const isUpper = (y < 250);
     ctx.save();
 
-    // 1. Sleek minimal rack background & frame
-    ctx.fillStyle = light ? 'rgba(248, 250, 252, 0.85)' : 'rgba(15, 23, 42, 0.85)';
+    // 1. Crisp modern card container with soft ambient elevation
+    ctx.shadowColor = light ? 'rgba(15, 23, 42, 0.05)' : 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = light ? '#ffffff' : '#0f172a';
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 4);
+    ctx.roundRect(x, y, w, h, 6);
     ctx.fill();
-    ctx.strokeStyle = light ? '#cbd5e1' : '#334155';
+    ctx.shadowColor = 'transparent';
+
+    ctx.strokeStyle = light ? '#e2e8f0' : '#1e293b';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // 2. Clean structural uprights (Left, Center, Right)
-    const postW = 3;
-    const postPositions = [x, x + Math.floor(w / 2) - 1.5, x + w - postW];
-    ctx.fillStyle = light ? '#64748b' : '#475569';
+    // 2. Structural steel columns (Left, Center, Right - down to shelf)
+    const postW = 2.5;
+    const postPositions = [x, x + Math.floor(w / 2) - 1, x + w - postW];
+    ctx.fillStyle = light ? '#cbd5e1' : '#334155';
     postPositions.forEach(px => {
-        ctx.fillRect(px, y, postW, h);
+        ctx.fillRect(px, y, postW, 35);
     });
 
-    // 3. Crisp horizontal shelf load beam
-    const beamY = y + 36;
-    ctx.fillStyle = '#ea580c'; // Clean safety orange
-    ctx.fillRect(x, beamY, w, 3);
+    // 3. Sleek horizontal shelf rail (Cool architectural steel)
+    const beamY = y + 32;
+    ctx.fillStyle = light ? '#94a3b8' : '#475569';
+    ctx.fillRect(x, beamY, w, 2.5);
+    ctx.fillStyle = light ? '#cbd5e1' : '#64748b';
+    ctx.fillRect(x, beamY + 2.5, w, 0.5);
 
-    // 4. 4 Clean, evenly spaced cargo pallet bays
+    // 4. 4 Harmonious, evenly spaced cargo pallet bays
     const numBays = 4;
     const baySpacing = (w - 12) / numBays;
     const palletW = 44;
@@ -289,93 +296,120 @@ function drawRack(x, y, w, h, accentColor, label, tierLevel, light) {
     for (let i = 0; i < numBays; i++) {
         const px = x + 6 + (i * baySpacing) + (baySpacing - palletW) / 2;
         const palletY = beamY - 4;
-        const cargoY = palletY - 18;
+        const cargoY = palletY - 16;
         const isDroneHoveringThisBay = isUpper && Math.abs(drone.x - (px + palletW / 2)) < 22;
 
-        // --- Clean Wooden Euro-Pallet ---
-        ctx.fillStyle = '#b45309';
-        ctx.fillRect(px, palletY, palletW, 4);
-        // Clean fork pocket cavities
-        ctx.fillStyle = light ? '#f8fafc' : '#0f172a';
+        // --- Refined Birch Timber Pallet ---
+        ctx.fillStyle = light ? '#ded3c3' : '#3e352e';
+        ctx.beginPath();
+        ctx.roundRect(px, palletY, palletW, 4, 1);
+        ctx.fill();
+        // Clean fork pocket cutouts
+        ctx.fillStyle = light ? '#ffffff' : '#0f172a';
         ctx.fillRect(px + 6, palletY + 2, 7, 2);
         ctx.fillRect(px + palletW - 13, palletY + 2, 7, 2);
 
-        // --- Neat, Modern Industrial Cargo ---
+        // --- Cohesive, Modern Cargo Palette ---
         if (i === 0) {
-            // Bay 0: Kraft Shipping Carton with subtle tape band
-            ctx.fillStyle = '#d97706';
+            // Bay 0: Soft Warm Kraft Shipping Carton
+            ctx.fillStyle = light ? '#d4b08c' : '#785b40';
             ctx.beginPath();
-            ctx.roundRect(px + 3, cargoY + 2, palletW - 6, 16, 2);
+            ctx.roundRect(px + 3, cargoY + 2, palletW - 6, 14, 2);
             ctx.fill();
-            ctx.fillStyle = '#b45309';
-            ctx.fillRect(px + Math.floor(palletW / 2) - 2, cargoY + 2, 4, 16);
+            // Subtle seal tape
+            ctx.fillStyle = light ? '#c29a72' : '#634932';
+            ctx.fillRect(px + Math.floor(palletW / 2) - 2, cargoY + 2, 4, 14);
 
         } else if (i === 1) {
-            // Bay 1: Industrial Molded Storage Tote
-            ctx.fillStyle = accentColor;
+            // Bay 1: Muted Slate-Blue Logistics Tote
+            ctx.fillStyle = light ? '#93c5fd' : '#1e40af';
             ctx.beginPath();
-            ctx.roundRect(px + 4, cargoY + 3, palletW - 8, 15, 2);
+            ctx.roundRect(px + 4, cargoY + 3, palletW - 8, 13, 2);
             ctx.fill();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
-            ctx.fillRect(px + 3, cargoY + 2, palletW - 6, 2.5);
+            // Clean tote rim
+            ctx.fillStyle = light ? '#60a5fa' : '#3b82f6';
+            ctx.fillRect(px + 3, cargoY + 2, palletW - 6, 2);
 
         } else if (i === 2) {
-            // Bay 2: Twin Industrial Storage Drums
+            // Bay 2: Twin Brushed Steel Storage Drums
             const drumW = 16;
             for (let d = 0; d < 2; d++) {
                 const dx = px + 4 + d * 20;
-                ctx.fillStyle = light ? '#64748b' : '#475569';
+                ctx.fillStyle = light ? '#94a3b8' : '#475569';
                 ctx.beginPath();
-                ctx.roundRect(dx, cargoY + 2, drumW, 16, 2);
+                ctx.roundRect(dx, cargoY + 2, drumW, 14, 2);
                 ctx.fill();
-                ctx.fillStyle = light ? '#94a3b8' : '#64748b';
-                ctx.fillRect(dx + 1, cargoY + 6, drumW - 2, 1.5);
-                ctx.fillRect(dx + 1, cargoY + 11, drumW - 2, 1.5);
+                // Refined horizontal metallic bands
+                ctx.fillStyle = light ? '#cbd5e1' : '#64748b';
+                ctx.fillRect(dx + 1, cargoY + 5, drumW - 2, 1.2);
+                ctx.fillRect(dx + 1, cargoY + 9, drumW - 2, 1.2);
             }
 
         } else {
-            // Bay 3: Staging Cargo Crate
-            ctx.fillStyle = light ? '#e2e8f0' : '#334155';
+            // Bay 3: Clean Staging Container
+            ctx.fillStyle = light ? '#f1f5f9' : '#1e293b';
             ctx.beginPath();
-            ctx.roundRect(px + 3, cargoY + 2, palletW - 6, 16, 2);
+            ctx.roundRect(px + 3, cargoY + 2, palletW - 6, 14, 2);
             ctx.fill();
-            ctx.fillStyle = accentColor;
-            ctx.fillRect(px + 3, cargoY + 8, palletW - 6, 3);
+            ctx.strokeStyle = light ? '#cbd5e1' : '#334155';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+            // Subtle accent band
+            ctx.fillStyle = light ? '#a5b4fc' : '#6366f1';
+            ctx.fillRect(px + 3, cargoY + 7, palletW - 6, 2.5);
         }
 
-        // --- Minimal Drone Hover Laser Scan ---
+        // --- Minimal Drone Laser Sweep ---
         if (isDroneHoveringThisBay) {
-            ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
-            ctx.fillRect(px + 2, cargoY, palletW - 4, 20);
+            ctx.fillStyle = 'rgba(14, 165, 233, 0.08)';
+            ctx.fillRect(px + 2, cargoY, palletW - 4, 18);
 
-            const scanY = cargoY + ((Date.now() / 25) % 18);
-            ctx.strokeStyle = '#38bdf8';
-            ctx.lineWidth = 1.4;
+            const scanY = cargoY + ((Date.now() / 25) % 16);
+            ctx.strokeStyle = '#0ea5e9';
+            ctx.lineWidth = 1.2;
             ctx.beginPath();
             ctx.moveTo(px + 2, scanY);
             ctx.lineTo(px + palletW - 2, scanY);
             ctx.stroke();
 
-            ctx.fillStyle = '#38bdf8';
+            ctx.fillStyle = '#0ea5e9';
             ctx.beginPath();
-            ctx.arc(px + Math.floor(palletW / 2), y + 6, 2.5, 0, Math.PI * 2);
+            ctx.arc(px + Math.floor(palletW / 2), y + 5, 2, 0, Math.PI * 2);
             ctx.fill();
         }
     }
 
-    // 5. Clean, Minimalist Rack Footer Label Strip
+    // 5. Sleek Divider Line between Cargo and Footer
+    ctx.strokeStyle = light ? '#f1f5f9' : '#1e293b';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 6, y + 41);
+    ctx.lineTo(x + w - 6, y + 41);
+    ctx.stroke();
+
+    // 6. Refined Footer Metadata Bar
+    // Status dot
     ctx.fillStyle = '#10b981';
     ctx.beginPath();
-    ctx.arc(x + 12, y + 49, 2.2, 0, Math.PI * 2);
+    ctx.arc(x + 14, y + 50.5, 2.5, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = light ? '#0f172a' : '#f8fafc';
-    ctx.font = 'bold 8px monospace';
-    ctx.fillText(label, x + 19, y + 51.5);
+    // Rack Title
+    ctx.fillStyle = light ? '#334155' : '#f1f5f9';
+    ctx.font = 'bold 7.5px monospace';
+    ctx.fillText(label, x + 21, y + 53);
 
+    // Clean Capacity Pill Badge
+    const badgeW = 44, badgeH = 11;
+    const badgeX = x + w - badgeW - 8;
+    const badgeY = y + 45;
+    ctx.fillStyle = light ? '#f1f5f9' : '#1e293b';
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 3);
+    ctx.fill();
     ctx.fillStyle = light ? '#64748b' : '#94a3b8';
-    ctx.font = '7.5px monospace';
-    ctx.fillText("CAP: 98%", x + w - 48, y + 51.5);
+    ctx.font = 'bold 7px monospace';
+    ctx.fillText("CAP 98%", badgeX + 6, badgeY + 8);
 
     ctx.restore();
 }
