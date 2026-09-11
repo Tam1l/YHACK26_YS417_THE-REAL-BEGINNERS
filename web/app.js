@@ -1929,6 +1929,7 @@ async function submitVisionPhoto(file, source) {
 }
 
 let pendingVisionPhoto = null;
+let latestOperatorVisionPhoto = null;
 function showSelectedOperatorImage(file) {
     if (!file) return;
     const reader = new FileReader();
@@ -1944,6 +1945,9 @@ function showSelectedOperatorImage(file) {
 }
 function queueVisionPhoto(file, source) {
     if (!file) return;
+    // The dispatcher must use the frame the operator chose, rather than a
+    // placeholder pixel. Keep this independently of auto-run mode.
+    latestOperatorVisionPhoto = { file, source };
     showSelectedOperatorImage(file);
     const auto = document.getElementById('sideAutoYolo');
     if (!auto || auto.checked) {
@@ -2098,10 +2102,15 @@ window.navigateToTab = navigateToTab;
 
 // ================= DEMO ACTIONS & CONTROLS =================
 // 1. Play / Pause
-document.getElementById('btnPlayPause')?.addEventListener('click', (e) => {
+document.getElementById('btnPlayPause')?.addEventListener('click', async (e) => {
     isRunning = !isRunning;
+    try {
+        await fetch(`/api/v1/system/traffic?paused=${!isRunning}`, { method: 'POST' });
+    } catch (_) {
+        // Keep the local arena control responsive even if the gateway is unavailable.
+    }
     e.currentTarget.innerHTML = isRunning ? '⏸ <span>Pause Fleet</span>' : '▶ <span>Resume Fleet</span>';
-    showToast(isRunning ? "Fleet Simulation Resumed" : "Fleet Simulation Paused", "info");
+    showToast(isRunning ? "Fleet simulation and background traffic resumed" : "Fleet simulation and background traffic paused", "info");
 });
 
 // 2. Automated Closed-Loop Hazard Lifecycle Demo
@@ -2194,12 +2203,20 @@ document.getElementById('btnBatchDemo').addEventListener('click', async () => {
     }
 });
 
-// 4. Kill Worker-1 / Restore Worker-1 (Visible Zero-Loss Failover Handover)
+// 4. Kill the live primary worker / Restore it (Visible Zero-Loss Failover Handover)
+function getPrimaryWorkerId() {
+    const workers = latestClusterData?.workers || [];
+    return workers.find(w => w.worker_id === 'local-worker-1')?.worker_id
+        || workers.find(w => w.worker_id === 'worker-1')?.worker_id
+        || 'local-worker-1';
+}
 document.getElementById('btnKillWorker').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
+    const workerId = getPrimaryWorkerId();
     if (worker1Alive) {
         try {
-            await fetch('/api/v1/debug/workers/worker-1/fail', { method: 'POST' });
+            const response = await fetch(`/api/v1/debug/workers/${workerId}/fail`, { method: 'POST' });
+            if (!response.ok) throw new Error(`gateway returned HTTP ${response.status}`);
             worker1Alive = false;
             failoverActive = true;
             failoverStartTime = Date.now();
@@ -2215,7 +2232,8 @@ document.getElementById('btnKillWorker').addEventListener('click', async (e) => 
         }
     } else {
         try {
-            await fetch('/api/v1/debug/workers/worker-1/recover', { method: 'POST' });
+            const response = await fetch(`/api/v1/debug/workers/${workerId}/recover`, { method: 'POST' });
+            if (!response.ok) throw new Error(`gateway returned HTTP ${response.status}`);
             worker1Alive = true;
             failoverActive = false;
             btn.innerHTML = '🔥 <span>Kill Worker-1</span> <span class="btn-tab-tag">Tab 1</span>';
@@ -2244,6 +2262,9 @@ document.getElementById('btnSurge').addEventListener('click', async () => {
     try {
         const res = await fetch('/api/v1/cloud/surge', { method: 'POST' });
         const data = await res.json();
+        if (!res.ok || data.status !== 'surge_injected') throw new Error(data.detail || `gateway returned HTTP ${res.status}`);
+        await new Promise(resolve => setTimeout(resolve, 350));
+        await pollTelemetry();
         showToast("Fleet Surge Injected (10 tasks)! Centering on Tab 2 (Autoscaler) to watch pod provisioning in real-time...", "info", 5000);
     } catch (e) {
         showToast(`Surge error: ${e}`, "error");
@@ -2257,6 +2278,9 @@ async function triggerAnnounceMission() {
     try {
         const res = await fetch('/api/v1/mission/demo_announce', { method: 'POST' });
         const data = await res.json();
+        if (!res.ok || !data.mission_id) throw new Error(data.detail || `gateway returned HTTP ${res.status}`);
+        await new Promise(resolve => setTimeout(resolve, 350));
+        await pollTelemetry();
         showToast(`📅 Mission ${data.mission_id} announced (${data.expected_critical_tasks} tasks)! Proactively pre-warming ${data.target_prewarmed_workers} workers ahead of surge.`, "info", 5000);
     } catch (e) {
         showToast(`Mission announcement failed: ${e}`, "error");
@@ -2395,51 +2419,34 @@ if (btnLakehouseTop) btnLakehouseTop.addEventListener('click', triggerLakehouseE
 const btnLakehouseTab = document.getElementById('btnTriggerLakehouseExport');
 if (btnLakehouseTab) btnLakehouseTab.addEventListener('click', triggerLakehouseExport);
 
-// 7. Robust System & Cluster Reset Functionality
-async function handleSystemReset() {
+async function resetSystem() {
     try {
-        const res = await fetch('/api/v1/cloud/reset', { method: 'POST' });
-        const data = await res.json();
-
+        const response = await fetch('/api/v1/system/reset', { method: 'POST' });
+        if (!response.ok) throw new Error(`gateway returned HTTP ${response.status}`);
         worker1Alive = true;
         worker2Alive = true;
         humanHazard = false;
-
+        isRunning = false;
+        latestVisionFrame = null;
+        activeMissions = [];
+        const pauseButton = document.getElementById('btnPlayPause');
+        if (pauseButton) pauseButton.innerHTML = '▶ <span>Resume Fleet</span>';
         const btnH = document.getElementById('btnHazard');
         if (btnH) btnH.innerHTML = '🚨 <span>TRIGGER HAZARD (AGV-01)</span> <span class="btn-tab-tag">Tab 4</span>';
-
         const btnK = document.getElementById('btnKillWorker');
         if (btnK) {
             btnK.innerHTML = '🔥 <span>KILL WORKER-1</span> <span class="btn-tab-tag">Tab 1</span>';
             btnK.className = 'btn btn-warning';
         }
-
-        // Reset canvas active missions queue
-        activeMissions = [];
-
-        // Refresh live cluster state immediately
-        await Promise.allSettled([
-            pollTelemetry(),
-            fetchLakehouseStatus()
-        ]);
-
-        showToast(data.message || "RoboNexus Private Cloud completely reset: Redis drained, workers healthy, autoscaler stable.", "success", 5000);
-        showBanner("🧹 CLOUD CLUSTER RESET: All worker pods healthy, Redis task queue cleared, state restored.", "rgba(16, 185, 129, 0.95)", "#059669");
-
-        // Update architecture node cards to reflect healthy state
-        document.querySelectorAll('.arch-node-card .node-live-dot').forEach(dot => {
-            dot.className = 'node-live-dot green';
-        });
-        const archWCount = document.getElementById('nodeStatWorkerCount');
-        if (archWCount) archWCount.innerText = '2/5 Online';
-        const archQueue = document.getElementById('nodeStatQueueDepth');
-        if (archQueue) archQueue.innerText = '0 tasks';
+        await Promise.allSettled([pollTelemetry(), fetchLakehouseStatus()]);
+        showToast("System reset: queue and live metrics cleared; workers recovered.", "success");
+        showBanner("🧹 CLOUD CLUSTER RESET: workers healthy, queue cleared, traffic paused.", "rgba(16, 185, 129, 0.95)", "#059669");
     } catch (e) {
         showToast(`Reset error: ${e}`, "error");
     }
 }
-
-document.getElementById('btnSystemReset')?.addEventListener('click', handleSystemReset);
+document.getElementById('btnSystemReset')?.addEventListener('click', resetSystem);
+document.getElementById('btnSideReset')?.addEventListener('click', resetSystem);
 
 // 8. Custom Task Dispatch (Centralized in Operator Side Panel)
 const sideDlEl = document.getElementById('sideDeadline');
@@ -2484,9 +2491,23 @@ async function handleDispatchPerceptionTask() {
     const preset = document.getElementById('sidePresetSelect')?.value || 'AGV-01';
     const crit = document.getElementById('sideCritSelect')?.value || 'CRITICAL';
     const dl = parseFloat(document.getElementById('sideDeadline')?.value || '100');
+    const scene = document.getElementById('sideSceneSelect')?.value || 'clear';
+    const sideStatus = document.getElementById('sideVisionStatus');
 
-    // Auto-navigate to Tab 5 after brief delay so user can see dispatch feedback
-    navigateToTab('tabBenchmarks', '#visionFeedCanvas', true, 1200);
+    if (!latestOperatorVisionPhoto?.file) {
+        if (sideStatus) sideStatus.innerText = 'Capture or upload a camera frame before dispatching a perception task.';
+        showToast('Capture or upload a photo first. The dispatcher sends that frame to YOLO.', 'warning');
+        return;
+    }
+
+    const imageBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(latestOperatorVisionPhoto.file);
+    });
+
+    if (sideStatus) sideStatus.innerText = `Dispatching ${scene} frame to the YOLO worker…`;
 
     try {
         const res = await fetch('/api/v1/inference', {
@@ -2500,17 +2521,37 @@ async function handleDispatchPerceptionTask() {
                 task_type: 'object_detection',
                 criticality: crit,
                 deadline_ms: dl,
-                image_base64: DUMMY_BASE64_IMAGE
+                image_base64: imageBase64,
+                source: latestOperatorVisionPhoto.source || `dispatcher_${scene}`
             })
         });
 
         if (res.ok) {
             const data = await res.json();
-            showToast(`Task Dispatched: ${data.request_id.substring(0, 8)}... (${crit} | ${dl}ms). Centered on Tab 5 (Perception Stream).`, "success");
+            if (sideStatus) sideStatus.innerText = `Queued ${data.request_id.substring(0, 8)}. Waiting for worker result…`;
+            const expiresAt = Date.now() + 20000;
+            while (Date.now() < expiresAt) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                const resultResponse = await fetch(`/api/v1/inference/${data.request_id}/result`, {
+                    headers: {'X-Robot-Token': 'robot-token-secret'}
+                });
+                if (!resultResponse.ok) continue;
+                const result = await resultResponse.json();
+                if (result.state === 'completed') {
+                    await pollTelemetry();
+                    if (sideStatus) sideStatus.innerText = `Completed: ${result.perception.action} (${result.detection_count || 0} detection(s)).`;
+                    showToast(`Dispatch complete: ${result.perception.action} | ${preset} | ${crit}`, result.perception.hazard_detected ? 'error' : 'success');
+                    navigateToTab('tabBenchmarks', '#visionFeedCanvas', true, 250);
+                    return;
+                }
+                if (result.state === 'failed') throw new Error(result.error || 'worker failed');
+            }
+            throw new Error('worker did not finish within 20 seconds');
         } else {
-            showToast(`Dispatch failed: ${res.statusText}`, "error");
+            throw new Error(`gateway returned HTTP ${res.status}`);
         }
     } catch (e) {
+        if (sideStatus) sideStatus.innerText = `Dispatch error: ${e.message}`;
         showToast(`Dispatch network error: ${e}`, "error");
     }
 }

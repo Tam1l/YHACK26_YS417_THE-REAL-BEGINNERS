@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir -r requirements-cpu.txt
 # Install YOLOv8 CPU dependencies (CPU PyTorch + torchvision + ultralytics)
 # as specified in docs/YOLO_MODEL_SETUP.md
 RUN pip install --no-cache-dir \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
+    --index-url https://download.pytorch.org/whl/cpu \
     torch==2.7.1+cpu \
     torchvision==0.22.1+cpu \
     && pip install --no-cache-dir \

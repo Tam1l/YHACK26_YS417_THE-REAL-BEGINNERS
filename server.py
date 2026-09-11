@@ -423,6 +423,50 @@ def get_system_metrics():
         "lakehouse_exports": int(redis_client.get("stats:lakehouse_exports") or 0)
     }
 
+
+@app.post("/api/v1/system/reset")
+def reset_local_demo_system():
+    """Clear volatile dashboard telemetry and recover the local worker pool."""
+    metric_keys = [
+        "stats:processed", "stats:latency_sum", "stats:critical_total",
+        "stats:critical_deadline_met", "stats:failovers", "stats:edge_fallbacks",
+        "stats:lakehouse_exports", "stats:predictive_scale_ups", "autoscaler:current_workers",
+        "vision:latest_task_id", "lakehouse:latest_export",
+    ]
+    redis_client.delete("queue:tasks", "history:tasks", "events:audit", "missions:active", "missions:history", *metric_keys)
+    # Stop synthetic traffic so the zeroed dashboard stays visible after reset.
+    redis_client.set("system:traffic_paused", "1")
+    redis_client.delete("cloud:autoscaler:events")
+    redis_client.hset("cloud:autoscaler:status", mapping={
+        "state": "STABLE", "current_workers": "2", "min_workers": "2",
+        "max_workers": "5", "queue_depth": "0", "active_mission_id": "",
+        "policy": "KEDA-style Queue Depth Metric",
+    })
+    recovered = []
+    for worker_key in redis_client.keys("worker:*") or []:
+        worker_id = worker_key.split("worker:", 1)[-1]
+        redis_client.delete(f"debug:fail:{worker_id}")
+        redis_client.hset(worker_key, mapping={
+            "status": "IDLE", "healthy": "true", "current_job_id": "",
+            "last_heartbeat": str(time.time()),
+        })
+        recovered.append(worker_id)
+    return {"status": "reset", "workers_recovered": recovered, "metrics_cleared": True}
+
+
+@app.get("/api/v1/system/traffic")
+def get_demo_traffic_state():
+    return {"paused": redis_client.get("system:traffic_paused") == "1"}
+
+
+@app.post("/api/v1/system/traffic")
+def set_demo_traffic_state(paused: bool = False):
+    if paused:
+        redis_client.set("system:traffic_paused", "1")
+    else:
+        redis_client.delete("system:traffic_paused")
+    return {"paused": paused}
+
 # ----------------- Predictive Compute Provisioning Endpoints -----------------
 @app.post("/api/v1/mission/announce", status_code=status.HTTP_201_CREATED)
 def announce_mission(request: MissionAnnouncement, auth=Depends(verify_token)):
@@ -827,7 +871,10 @@ def trigger_fleet_surge(req: Optional[SurgeRequest] = None, task_count: Optional
         sub = InferenceSubmission(
             robot_id=f"SURGE-AGV-{i+1:02d}",
             criticality="HIGH" if i % 2 == 0 else "NORMAL",
-            deadline_ms=200.0,
+            # A surge is a capacity demonstration, not an emergency stop.
+            # Keep its deadline above the maximum simulated queue estimate so
+            # the edge safety fallback does not reject the injected workload.
+            deadline_ms=1000.0,
             image_base64=dummy_b64
         )
         res = submit_inference(sub, auth={"tenant": fleet_tenants.TENANTS["FLEET-AGV-LOGISTICS"]})

@@ -84,6 +84,10 @@ def run_vision_inference(pil_img: Image.Image):
             confidences.append(round(random.uniform(0.80, 0.98), 4))
         return boxes, classes, confidences
 
+
+class SimulatedInFlightCrash(RuntimeError):
+    """Signals a debug kill after a worker has reserved a task."""
+
 class AIWorker(threading.Thread):
     def __init__(self, worker_id: str):
         super().__init__(name=worker_id, daemon=True)
@@ -126,6 +130,7 @@ class AIWorker(threading.Thread):
                 # Auto-recover if failure flag is cleared/removed
                 if not self.is_alive:
                     self.is_alive = True
+                    self.current_task_id = None
                     self.update_heartbeat(status="IDLE")
                     print(f"[+] RECOVERED: {self.worker_id} restored to healthy operation!")
 
@@ -172,6 +177,8 @@ class AIWorker(threading.Thread):
                 start_t = time.perf_counter()
                 boxes, classes, confidences = run_vision_inference(pil_img)
                 inference_ms = (time.perf_counter() - start_t) * 1000.0
+                if redis_client.get(f"debug:fail:{self.worker_id}") == "1":
+                    raise SimulatedInFlightCrash("debug failure injected during inference")
                 perception = evaluate_detections(boxes, classes, confidences, pil_img.size)
                 
                 now = time.time()
@@ -236,6 +243,10 @@ class AIWorker(threading.Thread):
                 
                 print(f"[OK] {self.worker_id} -> Task [{task_id[:8]}...] | Latency: {inference_ms:.1f}ms | Deadline Met: {deadline_met}")
                 
+            except SimulatedInFlightCrash:
+                self.is_alive = False
+                self.update_heartbeat(status="UNHEALTHY")
+                print(f"[!] IN-FLIGHT FAILURE: {self.worker_id} crashed while processing task {task_id[:8]}!")
             except Exception as e:
                 print(f"[ERR] {self.worker_id} execution error: {e}")
                 redis_client.hset(task_key, mapping={
@@ -244,8 +255,9 @@ class AIWorker(threading.Thread):
                     "completed_ts": str(time.time())
                 })
             finally:
-                self.current_task_id = None
-                self.update_heartbeat(status="IDLE")
+                if self.is_alive:
+                    self.current_task_id = None
+                    self.update_heartbeat(status="IDLE")
 
 class HealthSupervisor(threading.Thread):
     """Monitors worker heartbeats and automatically triggers in-flight failover."""

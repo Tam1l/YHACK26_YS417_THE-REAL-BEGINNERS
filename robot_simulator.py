@@ -12,6 +12,7 @@ from PIL import Image, ImageDraw
 SERVER_URL = os.getenv("SERVER_URL", "http://127.0.0.1:8000")
 INFERENCE_ENDPOINT = f"{SERVER_URL}/api/v1/inference"
 LEGACY_PREDICT_ENDPOINT = f"{SERVER_URL}/predict"
+TRAFFIC_CONTROL_ENDPOINT = f"{SERVER_URL}/api/v1/system/traffic"
 
 AUTH_HEADERS = {
     "X-Robot-Token": "robot-token-secret"
@@ -130,9 +131,18 @@ def poll_for_completion(req_id: str, robot_cfg: Dict, timeout: float = 15.0):
             pass
         time.sleep(0.1)
 
+def is_demo_traffic_paused() -> bool:
+    try:
+        return bool(requests.get(TRAFFIC_CONTROL_ENDPOINT, timeout=1.0).json().get("paused", False))
+    except Exception:
+        return False
+
 def robot_lifecycle_loop(robot_cfg: Dict):
     logging.info(f"Robot {robot_cfg['name']} active (Criticality: {robot_cfg['criticality']} | Deadline: {robot_cfg['deadline_ms']}ms)")
     while True:
+        if is_demo_traffic_paused():
+            time.sleep(0.5)
+            continue
         req_id = post_with_exponential_backoff(robot_cfg)
         if req_id:
             poll_for_completion(req_id, robot_cfg)
