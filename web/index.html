@@ -38,9 +38,10 @@
             <button class="btn btn-slate" id="btnSystemReset" title="Reset System & Worker Nodes">
                 🧹 <span>Reset System</span>
             </button>
-            <div class="status-pill" id="clockUTC" style="font-family: 'JetBrains Mono', monospace; font-size: 11px;">
-                00:00:00 UTC
-            </div>
+            <button class="btn btn-cloud-arch" id="btnOpenArchitecture" title="Open Interactive Private Cloud Architecture Map">
+                <span class="pulse-dot-cyan"></span>
+                🏛️ <span>Cloud Architecture</span>
+            </button>
         </div>
     </header>
 
@@ -516,9 +517,14 @@
                                 Exports fleet telemetry, scheduling logs, and sealed incidents into columnar Apache Parquet files in <code>data_lakehouse/</code> for PySpark/Trino analytics.
                             </p>
                         </div>
-                        <button class="btn btn-emerald" id="btnTriggerLakehouseExport" style="font-size: 12px; padding: 7px 16px;">
-                            ⚡ <span>Export Parquet Batch Now</span>
-                        </button>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button class="btn btn-emerald" id="btnTriggerLakehouseExport" style="font-size: 12px; padding: 7px 16px;">
+                                ⚡ <span>Export Parquet Batch Now</span>
+                            </button>
+                            <a class="btn btn-cyan" id="btnDownloadParquetFile" style="font-size: 12px; padding: 7px 16px; text-decoration: none; display: none;" download>
+                                📥 <span>Download .parquet</span>
+                            </a>
+                        </div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px;">
@@ -652,6 +658,310 @@
         </section>
 
         </main>
+    </div>
+
+    <!-- Interactive Private Cloud Architecture Modal -->
+    <div class="arch-modal-overlay" id="archTopologyModal" style="display: none;" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="archModalTitle">
+        <div class="arch-modal-dialog">
+            <!-- Modal Header -->
+            <div class="arch-modal-header">
+                <div class="arch-header-left">
+                    <div class="arch-header-icon">🏛️</div>
+                    <div>
+                        <h2 class="arch-modal-title" id="archModalTitle">RoboNexus Private Cloud System Architecture</h2>
+                        <div class="arch-modal-subtitles">
+                            <span class="arch-chip">ENTERPRISE PRIVATE CLOUD</span>
+                            <span class="arch-chip">SUB-MILLISECOND EVENT BUS</span>
+                            <span class="arch-chip">ISO 26262 ASIL-D GUARANTEE</span>
+                            <span class="arch-chip live-telemetry-chip"><span class="pulse-dot-emerald"></span> LIVE TELEMETRY</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="arch-header-center">
+                    <div class="arch-tier-filters" role="tablist">
+                        <button class="arch-filter-btn active" data-filter="all">All Tiers (14 Nodes)</button>
+                        <button class="arch-filter-btn" data-filter="tier-1">Tier 1: Ingress</button>
+                        <button class="arch-filter-btn" data-filter="tier-2">Tier 2: RADS Core</button>
+                        <button class="arch-filter-btn" data-filter="tier-3">Tier 3: Worker Fleet</button>
+                        <button class="arch-filter-btn" data-filter="tier-4">Tier 4: Safety</button>
+                        <button class="arch-filter-btn" data-filter="tier-5">Tier 5: Lakehouse</button>
+                    </div>
+                </div>
+
+                <div class="arch-header-right">
+                    <button class="arch-close-btn" id="btnCloseArchModal" aria-label="Close Architecture Map">✕</button>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="arch-modal-body">
+                <!-- Left: 2D System Topology Graph -->
+                <div class="arch-topology-canvas-pane">
+                    <div class="arch-canvas-guide">
+                        <span>💡 <b>Interactive 2D Architecture Map:</b> Click any node below to inspect live cluster telemetry, algorithmic formulas, and judge presentation talking points.</span>
+                        <div class="arch-canvas-legend">
+                            <span class="legend-item"><span class="legend-dot green"></span> Healthy / Active</span>
+                            <span class="legend-item"><span class="legend-dot cyan"></span> Ingress / Control</span>
+                            <span class="legend-item"><span class="legend-dot purple"></span> AI Inference</span>
+                            <span class="legend-item"><span class="legend-dot amber"></span> Lakehouse / Batch</span>
+                        </div>
+                    </div>
+
+                    <div class="arch-tiers-scroll">
+                        <!-- TIER 1: Edge Ingress & Gateway Layer -->
+                        <div class="arch-tier-section" data-tier="tier-1">
+                            <div class="arch-tier-header">
+                                <span class="tier-badge">TIER 1</span>
+                                <h4 class="tier-title">Edge Ingress & Mission Control Layer</h4>
+                                <span class="tier-tagline">Dual HTTP/gRPC API gateway & tenant security perimeter</span>
+                            </div>
+                            <div class="arch-tier-nodes">
+                                <div class="arch-node-card active-pulse" id="node-edge-gateway" data-node="edge-gateway" tabindex="0">
+                                    <div class="node-status-bar"><span class="node-live-dot green"></span> ONLINE</div>
+                                    <div class="node-body">
+                                        <div class="node-icon">🌐</div>
+                                        <div class="node-text">
+                                            <div class="node-name">Edge API Gateway</div>
+                                            <div class="node-spec">FastAPI + gRPC :8000 / :50051</div>
+                                        </div>
+                                    </div>
+                                    <div class="node-stat-pill" id="nodeStat-edge-gateway">RTT: <span class="val">~2.4ms</span></div>
+                                </div>
+
+                                <div class="arch-node-card" id="node-tenant-auth" data-node="tenant-auth" tabindex="0">
+                                    <div class="node-status-bar"><span class="node-live-dot green"></span> ENFORCING</div>
+                                    <div class="node-body">
+                                        <div class="node-icon">🛡️</div>
+                                        <div class="node-text">
+                                            <div class="node-name">Tenant Quota Guard</div>
+                                            <div class="node-spec">Multi-Tenancy & Rate Limiter</div>
+                                        </div>
+                                    </div>
+                                    <div class="node-stat-pill" id="nodeStat-tenant-auth">Tenants: <span class="val">4 Active</span></div>
+                                </div>
+
+                                <div class="arch-node-card" id="node-stream-ingest" data-node="stream-ingest" tabindex="0">
+                                    <div class="node-status-bar"><span class="node-live-dot green"></span> BUFFERING</div>
+                                    <div class="node-body">
+                                        <div class="node-icon">📹</div>
+                                        <div class="node-text">
+                                            <div class="node-name">Perception Stream Buffer</div>
+                                            <div class="node-spec">MJPEG / Base64 Vision Ingest</div>
+                                        </div>
+                                    </div>
+                                    <div class="node-stat-pill" id="nodeStat-stream-ingest">Loss: <span class="val">0.00%</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Flow Connector 1 -> 2 -->
+                        <div class="arch-flow-connector">
+                            <div class="connector-line"></div>
+                            <span class="flow-pill">⚡ Low-Latency gRPC Stream & Ingestion Dispatch (Sub-Millisecond Payload Bus) ⬇</span>
+                        </div>
+
+                        <!-- TIER 2: Algorithmic Orchestration Core -->
+                        <div class="arch-tier-section" data-tier="tier-2">
+                            <div class="arch-tier-header">
+                                <span class="tier-badge">TIER 2</span>
+                                <h4 class="tier-title">Algorithmic Orchestration Core (RADS Engine)</h4>
+                                <span class="tier-tagline">Preemptive scheduling mathematics & in-memory state fabric</span>
+                            </div>
+                            <div class="arch-tier-nodes">
+                                <div class="arch-node-card highlight-glow" id="node-rads-engine" data-node="rads-engine" tabindex="0">
+                                    <div class="node-status-bar"><span class="node-live-dot green"></span> SCHEDULING</div>
+                                    <div class="node-body">
+                                        <div class="node-icon">🧠</div>
+                                        <div class="node-text">
+                                            <div class="node-name">RADS Scheduler Engine</div>
+                                            <div class="node-spec">Dynamic Slack & Deadline Scoring</div>
+                                        </div>
+                                    </div>
+                                    <div class="node-stat-pill" id="nodeStat-rads-engine">Algorithm: <span class="val">Preemptive</span></div>
+                                </div>
+
+                                <div class="arch-node-card" id="node-redis-cluster" data-node="redis-cluster" tabindex="0">
+                                    <div class="node-status-bar"><span class="node-live-dot green"></span> CONNECTED</div>
+                                    <div class="node-body">
+                                        <div class="node-icon">⚡</div>
+                                        <div class="node-text">
+                                            <div class="node-name">Redis 7 State Fabric</div>
+                                            <div class="node-spec">ZSET Priority Queues & Locks</div>
+                                        </div>
+                                    </div>
+                                    <div class="node-stat-pill" id="nodeStat-redis-cluster">Queue: <span class="val" id="nodeStatQueueDepth">0 tasks</span></div>
+                                </div>
+
+                                <div class="arch-node-card" id="node-incident-archiver" data-node="incident-archiver" tabindex="0">
+                                    <div class="node-status-bar"><span class="node-live-dot green"></span> ARMED</div>
+                                    <div class="node-body">
+                                        <div class="node-icon">🗄️</div>
+                                        <div class="node-text">
+                                            <div class="node-name">Blackbox Archiver</div>
+                                            <div class="node-spec">Forensic Crash & Near-Miss Seal</div>
+                                        </div>
+                                    </div>
+                                    <div class="node-stat-pill" id="nodeStat-incident-archiver">Incidents: <span class="val" id="nodeStatIncidentCount">Active</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Flow Connector 2 -> 3 -->
+                        <div class="arch-flow-connector">
+                            <div class="connector-line"></div>
+                            <span class="flow-pill">⚡ Priority Dispatched Worker Assignments via Zero-Copy IPC & TCP ⬇</span>
+                        </div>
+
+                        <!-- TIER 3: Distributed Inference Worker Fleet -->
+                        <div class="arch-tier-section" data-tier="tier-3">
+                            <div class="arch-tier-header">
+                                <span class="tier-badge">TIER 3</span>
+                                <h4 class="tier-title">Distributed Inference Worker Fleet</h4>
+                                <span class="tier-tagline">Heterogeneous YOLOv8 Nano perception pods with reactive autoscaling</span>
+                            </div>
+                            <div class="arch-tier-nodes">
+                                <div class="arch-node-card" id="node-worker-fleet" data-node="worker-fleet" tabindex="0">
+                                    <div class="node-status-bar"><span class="node-live-dot green"></span> PODS ACTIVE</div>
+                                    <div class="node-body">
+                                        <div class="node-icon">🤖</div>
+                                        <div class="node-text">
+                                            <div class="node-name">YOLOv8 Worker Pods</div>
+                                            <div class="node-spec">Edge AI Vision Inference</div>
+                                        </div>
+                                    </div>
+                                    <div class="node-stat-pill" id="nodeStat-worker-fleet">Pods: <span class="val" id="nodeStatWorkerCount">2/5 Online</span></div>
+                                </div>
+
+                                <div class="arch-node-card" id="node-k8s-autoscaler" data-node="k8s-autoscaler" tabindex="0">
+                                    <div class="node-status-bar"><span class="node-live-dot green"></span> AUTOSCALING</div>
+                                    <div class="node-body">
+                                        <div class="node-icon">📈</div>
+                                        <div class="node-text">
+                                            <div class="node-name">Reactive Autoscaler</div>
+                                            <div class="node-spec">P95 Queue-Lag Feedback Loop</div>
+                                        </div>
+                                    </div>
+                                    <div class="node-stat-pill" id="nodeStat-k8s-autoscaler">State: <span class="val" id="nodeStatAutoscalerState">STABLE</span></div>
+                                </div>
+
+                                <div class="arch-node-card" id="node-dlq-handler" data-node="dlq-handler" tabindex="0">
+                                    <div class="node-status-bar"><span class="node-live-dot green"></span> WATCHING</div>
+                                    <div class="node-body">
+                                        <div class="node-icon">🩹</div>
+                                        <div class="node-text">
+                                            <div class="node-name">DLQ & Auto-Healer</div>
+                                            <div class="node-spec">Heartbeat Watchdog & 3-Strike Failover</div>
+                                        </div>
+                                    </div>
+                                    <div class="node-stat-pill" id="nodeStat-dlq-handler">Circuit: <span class="val">Closed (OK)</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Data Flow Connector 3 -> 4 & 5 -->
+                        <div class="arch-flow-connector">
+                            <div class="connector-line"></div>
+                            <span class="flow-pill">⚡ Real-Time Telemetry Stream & Batch Parquet Analytics Pipeline ⬇</span>
+                        </div>
+
+                        <!-- TIER 4 & 5: Safety & Enterprise Lakehouse -->
+                        <div class="arch-tier-row-dual">
+                            <!-- TIER 4 -->
+                            <div class="arch-tier-section" data-tier="tier-4" style="flex: 1;">
+                                <div class="arch-tier-header">
+                                    <span class="tier-badge">TIER 4</span>
+                                    <h4 class="tier-title">Safety & Observability</h4>
+                                    <span class="tier-tagline">ISO ASIL-D safety guarantees & metrics</span>
+                                </div>
+                                <div class="arch-tier-nodes">
+                                    <div class="arch-node-card" id="node-safety-monitor" data-node="safety-monitor" tabindex="0">
+                                        <div class="node-status-bar"><span class="node-live-dot green"></span> 100% CDSR</div>
+                                        <div class="node-body">
+                                            <div class="node-icon">🚨</div>
+                                            <div class="node-text">
+                                                <div class="node-name">Safety Enforcer</div>
+                                                <div class="node-spec">Zero Deadline Miss Guard</div>
+                                            </div>
+                                        </div>
+                                        <div class="node-stat-pill" id="nodeStat-safety-monitor">Misses: <span class="val" id="nodeStatMissedDeadlines">0</span></div>
+                                    </div>
+
+                                    <div class="arch-node-card" id="node-prometheus-metrics" data-node="prometheus-metrics" tabindex="0">
+                                        <div class="node-status-bar"><span class="node-live-dot green"></span> SCRAPING</div>
+                                        <div class="node-body">
+                                            <div class="node-icon">📊</div>
+                                            <div class="node-text">
+                                                <div class="node-name">Metrics Exporter</div>
+                                                <div class="node-spec">Prometheus & OpenTelemetry</div>
+                                            </div>
+                                        </div>
+                                        <div class="node-stat-pill" id="nodeStat-prometheus-metrics">P95: <span class="val" id="nodeStatP95Latency">~3.8ms</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TIER 5 -->
+                            <div class="arch-tier-section" data-tier="tier-5" style="flex: 1;">
+                                <div class="arch-tier-header">
+                                    <span class="tier-badge">TIER 5</span>
+                                    <h4 class="tier-title">Enterprise Data Lakehouse</h4>
+                                    <span class="tier-tagline">PyArrow columnar analytics & audit store</span>
+                                </div>
+                                <div class="arch-tier-nodes">
+                                    <div class="arch-node-card" id="node-lakehouse-exporter" data-node="lakehouse-exporter" tabindex="0">
+                                        <div class="node-status-bar"><span class="node-live-dot green"></span> SNAPPY COMPRESSED</div>
+                                        <div class="node-body">
+                                            <div class="node-icon">📦</div>
+                                            <div class="node-text">
+                                                <div class="node-name">Parquet Exporter</div>
+                                                <div class="node-spec">PyArrow Columnar Batch</div>
+                                            </div>
+                                        </div>
+                                        <div class="node-stat-pill" id="nodeStat-lakehouse-exporter">Rows: <span class="val" id="nodeStatParquetRows">102</span></div>
+                                    </div>
+
+                                    <div class="arch-node-card" id="node-audit-lakehouse" data-node="audit-lakehouse" tabindex="0">
+                                        <div class="node-status-bar"><span class="node-live-dot green"></span> READY</div>
+                                        <div class="node-body">
+                                            <div class="node-icon">🗃️</div>
+                                            <div class="node-text">
+                                                <div class="node-name">Lakehouse Store</div>
+                                                <div class="node-spec">PySpark / Trino / DuckDB</div>
+                                            </div>
+                                        </div>
+                                        <div class="node-stat-pill" id="nodeStat-audit-lakehouse">Format: <span class="val">.parquet</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Right: Detailed Node Inspector Drawer -->
+                <aside class="arch-inspector-drawer" id="archInspectorDrawer" aria-label="Selected Architecture Node Inspector">
+                    <div class="inspector-empty-state" id="inspectorEmptyState">
+                        <div class="empty-icon">🏛️</div>
+                        <h3>RoboNexus Private Cloud Overview</h3>
+                        <p>Our entire edge-robotics platform operates as a <b>dedicated on-premise private cloud</b> engineered for ultra-low latency, multi-tenant fleet isolation, and ISO 26262 functional safety.</p>
+                        <div class="overview-pills">
+                            <span class="ov-pill">⚡ Sub-millisecond dispatch</span>
+                            <span class="ov-pill">🛡️ Air-gapped factory safety</span>
+                            <span class="ov-pill">🤖 Heterogeneous GPU/CPU workers</span>
+                            <span class="ov-pill">📊 Regulatory Parquet lakehouse</span>
+                        </div>
+                        <div class="inspector-tip">
+                            👆 <b>Touch or click any architecture node</b> on the map to inspect its real-time operating metrics, algorithmic formulas, and judge presentation notes.
+                        </div>
+                    </div>
+
+                    <div class="inspector-detail-content" id="inspectorDetailContent" style="display: none;">
+                        <!-- Populated by JS -->
+                    </div>
+                </aside>
+            </div>
+        </div>
     </div>
 
     <!-- Toast Notifications Container -->
