@@ -17,19 +17,12 @@
             </div>
         </div>
 
-        <div class="header-status-pills">
-            <div class="status-pill" id="pillGateway">
-                <span class="status-dot pulse" id="dotGateway"></span>
-                <span>GATEWAY: <b id="txtGatewayStatus">CONNECTING...</b></span>
-            </div>
-            <div class="status-pill" id="pillWorkers">
-                <span class="status-dot" id="dotWorkers"></span>
-                <span>WORKERS: <b id="txtWorkerCount">0/5 ONLINE</b></span>
-            </div>
-            <div class="status-pill" id="pillAutoscaler">
-                <span>AUTOSCALER: <b id="txtAutoscalerState">STABLE</b></span>
-            </div>
-        </div>
+        <!-- Hidden status elements preserved for JS telemetry bindings -->
+        <span id="txtGatewayStatus" style="display:none">ONLINE</span>
+        <span id="dotGateway" style="display:none"></span>
+        <span id="dotWorkers" style="display:none"></span>
+        <span id="txtWorkerCount" style="display:none">0/5 ONLINE</span>
+        <span id="txtAutoscalerState" style="display:none">STABLE</span>
 
         <div class="header-actions">
             <button class="btn btn-slate" id="btnThemeToggle" title="Toggle Theme">
